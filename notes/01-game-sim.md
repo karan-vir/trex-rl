@@ -17,4 +17,15 @@
 
 ## Try it
 
-    python scripts/play.py      # SPACE/UP jump, DOWN duck, R restart, ESC quit
+    python scripts/play.py      # SPACE/UP jump, DOWN duck, R restart, F fullscreen, ESC quit
+
+## Sprites and fullscreen (added after first playtest)
+
+- **Sprites live in `trex/sprites.py`**, drawn from rectangles of palette letters and
+  scaled 2x. No image files, so tweaking a sprite means changing a number.
+- **Animation is driven by `game.ticks`, not the wall clock.** Running legs, wing
+  flaps and blinking will look identical in a replay of the same episode.
+- **Personality is a function of game state.** The dino looks scared when an
+  obstacle is within 130px, blinks every few seconds, and gets X eyes on a crash.
+- **Fullscreen** uses Pygame's `SCALED` mode: the game is always drawn at 600x200
+  and stretched to the window. Resolution changes never touch the physics.

@@ -81,6 +81,7 @@ class TRexGame:
         self.speed = START_SPEED
         self.score = 0.0
         self.ticks = 0
+        self.distance = 0.0       # total pixels scrolled (used for background animation)
         self.passed = 0           # obstacles successfully dodged
         self.done = False
         self.dino_y = 0.0
@@ -119,6 +120,7 @@ class TRexGame:
         self._spawn_obstacles()
 
         self.ticks += 1
+        self.distance += self.speed
         self.speed = min(MAX_SPEED, self.speed + SPEED_RAMP)
         self.score += self.speed * 0.025
 
