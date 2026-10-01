@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: trex-rl
+Version: 0.1.0
+Summary: A T-Rex Runner simulation and the RL agents that learn to play it
+Requires-Python: >=3.10
+Requires-Dist: numpy
+Requires-Dist: pygame-ce
+Requires-Dist: gymnasium
+Requires-Dist: matplotlib
+Provides-Extra: rl
+Requires-Dist: stable-baselines3; extra == "rl"
+Requires-Dist: torch; extra == "rl"
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"

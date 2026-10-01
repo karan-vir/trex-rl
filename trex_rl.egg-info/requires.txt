@@ -1,0 +1,11 @@
+numpy
+pygame-ce
+gymnasium
+matplotlib
+
+[dev]
+pytest
+
+[rl]
+stable-baselines3
+torch

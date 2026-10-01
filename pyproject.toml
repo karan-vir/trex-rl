@@ -1,0 +1,21 @@
+[project]
+name = "trex-rl"
+version = "0.1.0"
+description = "A T-Rex Runner simulation and the RL agents that learn to play it"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pygame-ce",
+    "gymnasium",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+rl = ["stable-baselines3", "torch"]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["trex", "trex.agents"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
