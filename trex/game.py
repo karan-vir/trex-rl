@@ -51,14 +51,38 @@ PTERO_MIN_SCORE = 300   # no pterodactyls in the early game
 MIN_GAP_TICKS = 40
 MAX_GAP_FACTOR = 2.2
 
+# --- "Chrome-like" mode ------------------------------------------------------------
+# TRexGame(chrome_like=True) swaps in the real game's obstacle generator and jump, as read
+# from chromedino.com (the classic Chromium dino code). Differences from the simple mode:
+#   * cacti come in groups of 1-3 (large groups only from speed 7, small from speed 4)
+#   * the gap after an obstacle grows with ITS width and the speed:
+#         gap = uniform(width * speed + min_gap * 0.6,  1.5 * that)       (px)
+#     so after a narrow obstacle at high speed the next one can arrive only ~22 ticks later
+#   * pterodactyls only once speed >= 8.5, flying at heights 0 / 25 / 50, 40 px tall
+#   * no more than 2 identical obstacle types in a row
+#   * first obstacle appears after 3 seconds (180 ticks)
+#   * the jump gets stronger with speed (v0 = 10 + speed/10) and is capped: once above
+#     63 px the rise slows to 5 px/tick, so the apex is ~85 px however fast you go
+CHROME_SIZES = {CACTUS_SMALL: (17, 35), CACTUS_LARGE: (25, 50), PTERO: (46, 40)}
+CHROME_MIN_GAP = {CACTUS_SMALL: 120, CACTUS_LARGE: 120, PTERO: 150}      # px, before x 0.6
+CHROME_MULTIPLE_SPEED = {CACTUS_SMALL: 4.0, CACTUS_LARGE: 7.0, PTERO: 1e9}
+CHROME_MIN_SPEED = {CACTUS_SMALL: 0.0, CACTUS_LARGE: 0.0, PTERO: 8.5}
+CHROME_PTERO_HEIGHTS = (0, 25, 50)
+GAP_COEFFICIENT, MAX_GAP_COEFFICIENT = 0.6, 1.5
+MAX_CLUSTER, MAX_DUPLICATES = 3, 2
+CLEAR_TICKS = 180
+JUMP_SPEED_BONUS = 0.1
+JUMP_CAP_HEIGHT, JUMP_CAP_VELOCITY = 63.0, 5.0
+
 
 @dataclass
 class Obstacle:
     kind: str
     x: float          # left edge
     y: float          # bottom edge, height above ground
-    w: int
+    w: int            # total width (a group of 3 cacti is 3x the single width)
     h: int
+    size: int = 1     # how many cacti are in the group
 
 
 def _hitbox(x: float, y: float, w: float, h: float):
@@ -71,15 +95,18 @@ def _overlap(a, b) -> bool:
     return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
 
 
-def dino_physics(y: float, vy: float, action: int) -> tuple[float, float, bool]:
+def dino_physics(
+    y: float, vy: float, action: int, speed: float | None = None
+) -> tuple[float, float, bool]:
     """One tick of dino physics. Returns (new_y, new_vy, is_ducking).
 
     A pure function (no game object needed), so tests and planning agents can
     ask "what happens if the dino does X from here?" without copying the game.
+    Pass `speed` to get the Chrome-like jump (stronger at speed, capped apex).
     """
     on_ground = y <= 0
     if action == JUMP and on_ground:
-        vy = JUMP_VELOCITY
+        vy = JUMP_VELOCITY if speed is None else JUMP_VELOCITY + speed * JUMP_SPEED_BONUS
     # Ducking = holding DUCK on the ground. In mid-air the same key means fall faster.
     ducking = action == DUCK and on_ground
     fast_fall = action == DUCK and not on_ground
@@ -90,6 +117,8 @@ def dino_physics(y: float, vy: float, action: int) -> tuple[float, float, bool]:
     y += vy
     if y <= 0:   # landed
         return 0.0, 0.0, ducking
+    if speed is not None and y > JUMP_CAP_HEIGHT and vy > JUMP_CAP_VELOCITY:
+        vy = JUMP_CAP_VELOCITY
     return y, vy, ducking
 
 
@@ -99,7 +128,8 @@ def dino_hitbox(y: float, ducking: bool):
 
 
 class TRexGame:
-    def __init__(self, seed: int | None = None):
+    def __init__(self, seed: int | None = None, chrome_like: bool = False):
+        self.chrome_like = chrome_like
         self.reset(seed)
 
     # ------------------------------------------------------------------
@@ -115,7 +145,9 @@ class TRexGame:
         self.dino_vy = 0.0
         self.ducking = False
         self.obstacles: list[Obstacle] = []
-        self._next_spawn_x = WORLD_WIDTH + 200   # first obstacle shows up a bit late
+        self._recent: list[str] = []             # last obstacle kinds (chrome-like duplicate rule)
+        # first obstacle shows up a bit late (3 seconds late in chrome-like mode)
+        self._next_spawn_x = WORLD_WIDTH + (CLEAR_TICKS * START_SPEED if self.chrome_like else 200)
 
     # ------------------------------------------------------------------
     @property
@@ -141,7 +173,7 @@ class TRexGame:
             return False
 
         self.dino_y, self.dino_vy, self.ducking = dino_physics(
-            self.dino_y, self.dino_vy, action
+            self.dino_y, self.dino_vy, action, self.speed if self.chrome_like else None
         )
         self._move_world()
         self._spawn_obstacles()
@@ -171,6 +203,9 @@ class TRexGame:
     def _spawn_obstacles(self):
         if self._next_spawn_x > WORLD_WIDTH:
             return
+        if self.chrome_like:
+            self._spawn_chrome_like()
+            return
         kind = self._pick_kind()
         w, h = OBSTACLE_SIZES[kind]
         y = self.rng.choice(PTERO_HEIGHTS) if kind == PTERO else 0
@@ -184,3 +219,23 @@ class TRexGame:
         if self.score >= PTERO_MIN_SCORE:
             kinds.append(PTERO)
         return self.rng.choice(kinds)
+
+    def _spawn_chrome_like(self):
+        kinds = [k for k in CHROME_SIZES if self.speed >= CHROME_MIN_SPEED[k]]
+        recent = self._recent[-MAX_DUPLICATES:]
+        if len(recent) == MAX_DUPLICATES and len(set(recent)) == 1 and len(kinds) > 1:
+            kinds = [k for k in kinds if k != recent[0]]   # no third identical type in a row
+        kind = self.rng.choice(kinds)
+        self._recent.append(kind)
+
+        size = self.rng.randint(1, MAX_CLUSTER)
+        if size > 1 and self.speed < CHROME_MULTIPLE_SPEED[kind]:
+            size = 1
+        unit_w, h = CHROME_SIZES[kind]
+        w = unit_w * size
+        y = self.rng.choice(CHROME_PTERO_HEIGHTS) if kind == PTERO else 0
+        self.obstacles.append(Obstacle(kind, WORLD_WIDTH, y, w, h, size))
+
+        min_gap = round(w * self.speed + CHROME_MIN_GAP[kind] * GAP_COEFFICIENT)
+        gap = self.rng.uniform(min_gap, min_gap * MAX_GAP_COEFFICIENT)
+        self._next_spawn_x = WORLD_WIDTH + w + gap
