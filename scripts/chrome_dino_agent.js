@@ -35,7 +35,7 @@
     const noseX = t.xPos + t.config.WIDTH;
     const groundBottom = t.groundYPos + t.config.HEIGHT;   // y of the ground line
     const o = r.horizon.obstacles.find((ob) => ob.xPos + ob.width > t.xPos);
-    const base = { speed: r.currentSpeed, onGround: !t.jumping };
+    const base = { speed: r.currentSpeed, onGround: !t.jumping, dinoY: groundBottom - t.config.HEIGHT - t.yPos };
     if (!o) return { ...base, hasObstacle: false };
     return {
       ...base,
@@ -85,6 +85,12 @@
     S.jumpDown = S.duckDown = false;
   }
 
+  // chrome://dino has r.playing. Older copies (e.g. chromedino.com) don't. There `activated`
+  // is not reset after a restart and `paused` stays true while the game runs, so neither
+  // can be trusted; ask whether the game loop is actually running and not crashed.
+  const isPlaying = (r) =>
+    r.playing !== undefined ? r.playing : !!(r.isRunning && r.isRunning() && !r.crashed);
+
   const score = (r) => Math.ceil(r.distanceMeter.getActualDistance(Math.ceil(r.distanceRan)));
 
   // ---- Episode loop --------------------------------------------------------------
@@ -93,20 +99,20 @@
     if (!Runner || !Runner.instance_) throw new Error('No Runner.instance_ here: open chrome://dino');
     S.running = true;
     S.results = [];
-    let frame = 0, lastObs = null, lastAction = 'NOOP', restartAt = 0, begun = false;
+    let frame = 0, lastObs = null, lastAction = 'NOOP', restartAt = 0, lastKick = 0;
     console.log(`[dinoAgent] ${episodes} episodes, stop at score ${maxScore}, lead ${lead} ticks`);
 
     function finish(outcome) {
       const r = Runner.instance_;
       const res = {
         episode: S.results.length + 1, outcome, score: score(r), frames: frame,
-        speed: +r.currentSpeed.toFixed(2),
+        speed: +r.currentSpeed.toFixed(2), distance: Math.round(r.distanceRan),
       };
       if (outcome === 'crash' && lastObs) {
         Object.assign(res, {
           killer: lastObs.type, cluster: lastObs.size, killerWidth: lastObs.width,
           distAtLastFrame: Math.round(lastObs.dist), flyY: Math.round(lastObs.flyY),
-          action: lastAction, wasOnGround: lastObs.onGround,
+          action: lastAction, wasOnGround: lastObs.onGround, dinoY: Math.round(lastObs.dinoY),
         });
       }
       S.results.push(res);
@@ -122,17 +128,18 @@
 
       if (r.crashed) {
         if (!restartAt) {                                  // just crashed
-          finish('crash');
+          if (frame > 0) finish('crash');                  // ignore crashes we weren't playing
           if (S.results.length >= episodes) return done();
           restartAt = now + 1300;
         } else if (now >= restartAt) {
           key('keydown', KEY.RESTART); key('keyup', KEY.RESTART);   // Enter restarts
-          restartAt = 0; begun = true;
+          restartAt = 0;
         }
-      } else if (!r.playing) {
-        if (!begun) { key('keydown', KEY.JUMP); key('keyup', KEY.JUMP); begun = true; }
+      } else if (!isPlaying(r)) {
+        if (now - lastKick > 1000) {                       // press jump to start the game
+          key('keydown', KEY.JUMP); key('keyup', KEY.JUMP); lastKick = now;
+        }
       } else {
-        begun = true;
         frame++;
         lastObs = observe(r);
         lastAction = decide(lastObs, lead);

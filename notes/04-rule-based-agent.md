@@ -106,3 +106,71 @@ may differ in the current version; if the script throws, that is the first place
 1. Open chrome://dino, DevTools (Cmd+Option+J), Console tab.
 2. Paste the script, then `dinoAgent.start({ episodes: 3, maxScore: 1500 })`.
 3. Keep the tab in front. Results appear in the console and in `dinoAgent.results`.
+
+## Result: the rule on chromedino.com (built-in browser, 10 agent-controlled episodes)
+
+chromedino.com runs the classic Chromium dino code (same 600x150 world, same speeds and
+gravity). Episodes were capped at score 400 or 800.
+
+| # | outcome | score | speed | what happened |
+|---|---|---|---|---|
+| A1 | crash | 116 | 7.4 | landed on the tail of a 3x large cactus group (dist -90) |
+| B1 | survived | 800 | 12.8 | |
+| B2 | crash | 105 | 7.3 | landed on the tail of a 3x large group (dist -80, height 47) |
+| B3 | crash | 159 | 7.8 | landed on the tail of a 3x large group (dist -94, height 46) |
+| C1 | survived | 400 | 10.0 | |
+| C2 | crash | 252 | 8.7 | 3x small group, dino at height 86 (cause NOT identified) |
+| C3 | crash | 227 | 8.5 | 3x large group, dino on the ground inside it (jumped too late) |
+| C4 | crash | 171 | 8.0 | landed on the tail of a 3x large group (dist -92, height 47) |
+| C5 | crash | 266 | 8.9 | mid-height pterodactyl, dino airborne at height 43 |
+| C6 | crash | 120 | 7.4 | landed on the tail of a 3x large group (dist -84, height 46) |
+
+**2 of 10 survived; 8 crashed at scores 105 to 266.** In our simulator the same rule
+survived 100 of 100.
+
+### What the data says
+
+- **6 of the 8 crashes involve a group of 3 large cacti (75 px wide).** In 5 of them the
+  dino came down onto the far end of the group while still over it. For C4 and C6 I
+  recorded every obstacle on screen at the crash: only that cactus group was there, and
+  the dino was descending through 54, 51, 47 px (large cactus: 50 px).
+- **Why:** the rule jumps a fixed 12 ticks before the obstacle's front edge arrives.
+  A jump only stays above a 50 px cactus for about ticks 5 to 24 after takeoff. A single
+  cactus fits easily; a 75 px group needs the dino to stay above it for ~15 more ticks, so
+  the jump has to start LATER. With the arc about 19 ticks long and the obstacle needing
+  (75 + 36) / 8 = ~14 ticks of cover, jump lead must be roughly 6 to 10, not 12.
+  (This is my own calculation from the traces, not yet tested as a fix.)
+- **Our simulator only had single cacti**, so the fixed lead looked perfect there.
+  This is the sim-to-real gap, and it matches prediction 2 from above.
+- C2, C3 and C5 are not explained; they are one case each.
+
+### Predictions, scored
+
+1. Single cacti fine: plausible (both survivors passed many), not isolated.
+2. Groups break it: **confirmed**.
+3. Higher real jumps help: wrong or untested. The real game caps jump height
+   (apex ~88 px here) and the arc is shorter than I assumed.
+4. Pterodactyls appear later: consistent (the only pterodactyl crash was at speed 8.9).
+5. Works for a while then dies: confirmed.
+
+### Bugs found in my own script along the way (fixed in the repo)
+
+- This site never sets `activated` back to true after a restart, and leaves `paused` true
+  while the game runs. My "is it playing?" check used both, so the agent never took
+  control and the dino ran into the first obstacle; those runs were logged as crashes.
+  Fix: use `isRunning() && !crashed`, and don't record a crash if the agent never played a frame.
+- Lesson: when a result looks wrong (0 frames, a score that doesn't match), check the
+  measuring tool before blaming the agent.
+
+### Other things noticed
+
+- The game's speed rises per frame, not per second. This display's animation loop runs at
+  ~110 to 120 Hz, so speed 12.8 was reached in about a minute instead of about two.
+- The page tries to POST scores and analytics. I blocked all non-GET requests on the page
+  before running (106 blocked), so no scores were submitted to the public leaderboard.
+
+### Next
+
+Add cactus groups (1 to 3) to our simulator, make the rule width-aware (jump later for
+wider obstacles), check it in the sim, then rerun on chromedino.com. This also matters for
+the learning agents: anything trained only on single cacti will inherit the same blind spot.
