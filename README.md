@@ -10,7 +10,7 @@ A learning project: build a T-Rex Runner simulation from scratch, expose it as a
 | 1 | Game sim + human play mode (Pygame) | done |
 | 2 | Tests: determinism, collisions, solvability | done |
 | 3 | Gymnasium env + random agent | done |
-| 4 | Rule-based baseline agent | done |
+| 4 | Rule-based baseline agent (+ real-game test on chromedino.com) | done |
 | 5 | PPO (Stable-Baselines3) | todo |
 | 6 | Neuroevolution (hand-written NN + GA) | todo |
 | 7 | Compare agents on fixed seeds | todo |

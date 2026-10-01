@@ -171,6 +171,62 @@ survived 100 of 100.
 
 ### Next
 
-Add cactus groups (1 to 3) to our simulator, make the rule width-aware (jump later for
-wider obstacles), check it in the sim, then rerun on chromedino.com. This also matters for
-the learning agents: anything trained only on single cacti will inherit the same blind spot.
+(Done, see the next section.)
+
+## Fixing it: what the real cause turned out to be
+
+My first diagnosis (wide groups need a later jump) was only half right. The full story:
+
+1. **The jump itself is fine.** I measured it on chromedino.com: apex 87 px at tick ~14.6,
+   in the air ~34 ticks, above a 50 px cactus from tick 5.6 to 27.6. The jump is capped
+   (about 85 px at any speed), so speed barely changes it.
+2. **Obstacles move slower than the reported speed.** The browser runs at 121 fps; the game
+   moves objects by `floor(speed x step)` whole pixels per frame, so they lose a fraction
+   every frame. Measured over 2,484 frames: actual / reported = **0.871 at speed 6-7,
+   0.858 at speed 7-8**. The agent trusted the reported speed, so it believed obstacles
+   arrive ~14% sooner than they do, jumped ~4 ticks early, and came down on the far
+   end of wide groups.
+3. **This is a property of the screen, not the game design.** On a 60 Hz display the same
+   rounding loses less. Our numbers are for a 120 Hz pane.
+
+### Reproducing it in the simulator
+
+`TRexGame(chrome_like=True, motion_scale=0.87)` moves obstacles at 0.87x while still
+reporting the full speed. 120 seeds each, chrome-like generator:
+
+| agent | survived | median crash score | killed by |
+|---|---|---|---|
+| fixed lead 12, obstacles at full speed | 113/120 | 1270 | few large cacti |
+| **fixed lead 12, obstacles at 0.87x** | **0/120** | **225** | **120 large cacti** |
+| width-aware, trusts reported speed | 120/120 | | |
+| width-aware, uses the real speed | 120/120 | | |
+
+Row 2 matches the real result for the old rule (median crash score ~170, large groups).
+So the diagnosis is confirmed independently, not just argued.
+
+### The fix in the Chrome script
+
+`scripts/chrome_dino_agent.js` now (a) jumps later for wider obstacles, with the arc center
+taken from the measured jump, and (b) **measures** obstacle speed from frame to frame
+instead of trusting `currentSpeed`.
+
+**Real result on chromedino.com: 6 of 6 episodes survived to the score-400 cap** (speed ~10).
+The old rule: 1 of 6 in the same setup, 2 of 10 overall. Caveats: the cap is low, the
+sample is 6, and the real game gets harder (speed 13) after score ~600 which this run did not reach.
+
+### Lessons
+
+- The simulator can be wrong in ways you can only find by comparing against the real thing.
+  Here a single hidden number (0.87) separated "perfect" from "fails every time".
+- When the cause is uncertain, measure it directly (the arc, the speed) instead of guessing.
+- An agent that measures what it needs is more robust than one given a fixed assumption.
+  A learning agent trained in the real environment would learn this offset for itself.
+- Bug found in my own script again: on a freshly loaded page the game loop already ticks,
+  so "loop is running" is not "dino is playing". Now also requires distanceRan > 0.
+
+### The leaderboard
+
+chromedino.com posts every finished game to `/inc/set.php` (name from a cookie, score,
+duration, obstacles passed, jump counts), automatically and unconditionally. Setting a
+nickname registers it on their server (`/inc/nick.php`, with "already taken" handling). All my
+runs blocked outgoing POSTs, so nothing has been submitted.

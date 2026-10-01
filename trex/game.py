@@ -128,8 +128,13 @@ def dino_hitbox(y: float, ducking: bool):
 
 
 class TRexGame:
-    def __init__(self, seed: int | None = None, chrome_like: bool = False):
+    def __init__(self, seed: int | None = None, chrome_like: bool = False,
+                 motion_scale: float = 1.0):
         self.chrome_like = chrome_like
+        # Real-game quirk: obstacles can move slower than the reported speed. On a 120 Hz
+        # screen chromedino.com moves them in whole pixels per frame (floor), measured at
+        # ~0.86-0.87x the reported speed. The reported (observed) speed stays unchanged.
+        self.motion_scale = motion_scale
         self.reset(seed)
 
     # ------------------------------------------------------------------
@@ -192,13 +197,14 @@ class TRexGame:
 
     # ------------------------------------------------------------------
     def _move_world(self):
+        move = self.speed * self.motion_scale
         for o in self.obstacles:
-            o.x -= self.speed
+            o.x -= move
         before = len(self.obstacles)
         self.obstacles = [o for o in self.obstacles if o.x + o.w > 0]
         # an obstacle that scrolled off the left edge was dodged
         self.passed += before - len(self.obstacles)
-        self._next_spawn_x -= self.speed
+        self._next_spawn_x -= move
 
     def _spawn_obstacles(self):
         if self._next_spawn_x > WORLD_WIDTH:

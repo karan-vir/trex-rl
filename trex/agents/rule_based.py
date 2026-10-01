@@ -20,7 +20,7 @@ _I = {name: i for i, name in enumerate(OBS_NAMES)}
 
 class RuleBasedAgent:
     def __init__(self, lead_ticks: float = 12.0, width_aware: bool = False,
-                 arc_center: float = 15.5):
+                 arc_center: float = 15.5, speed_scale: float = 1.0):
         # How many ticks before an obstacle arrives we react. Too late and we hit it on
         # the way up; too early and we land on it. Measured: 6..18 all survive every
         # seed, 4 and 22+ fail every seed. 12 is the middle of that window.
@@ -32,12 +32,15 @@ class RuleBasedAgent:
         # arc_center = ticks after takeoff at the middle of the time spent above a cactus.
         self.width_aware = width_aware
         self.arc_center = arc_center
+        # If obstacles really move at only a fraction of the reported speed (see
+        # TRexGame.motion_scale), use that fraction. The Chrome script measures it live.
+        self.speed_scale = speed_scale
 
     def act(self, obs) -> int:
         if obs[_I["obs0_width"]] == 0:                 # nothing ahead
             return NOOP
 
-        speed = START_SPEED + obs[_I["speed"]] * (MAX_SPEED - START_SPEED)   # px per tick
+        speed = (START_SPEED + obs[_I["speed"]] * (MAX_SPEED - START_SPEED)) * self.speed_scale  # px per tick
         dist = obs[_I["obs0_dist"]] * WORLD_WIDTH                            # px to the dino's nose
         fly_y = obs[_I["obs0_y"]] * FLY_SCALE                                # height off the ground
         on_ground = obs[_I["dino_y"]] <= 0
