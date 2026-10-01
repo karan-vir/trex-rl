@@ -71,6 +71,33 @@ def _overlap(a, b) -> bool:
     return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
 
 
+def dino_physics(y: float, vy: float, action: int) -> tuple[float, float, bool]:
+    """One tick of dino physics. Returns (new_y, new_vy, is_ducking).
+
+    A pure function (no game object needed), so tests and planning agents can
+    ask "what happens if the dino does X from here?" without copying the game.
+    """
+    on_ground = y <= 0
+    if action == JUMP and on_ground:
+        vy = JUMP_VELOCITY
+    # Ducking = holding DUCK on the ground. In mid-air the same key means fall faster.
+    ducking = action == DUCK and on_ground
+    fast_fall = action == DUCK and not on_ground
+
+    if on_ground and vy <= 0:
+        return 0.0, 0.0, ducking
+    vy -= GRAVITY * (FAST_FALL if fast_fall else 1.0)
+    y += vy
+    if y <= 0:   # landed
+        return 0.0, 0.0, ducking
+    return y, vy, ducking
+
+
+def dino_hitbox(y: float, ducking: bool):
+    w, h = (DUCK_W, DUCK_H) if ducking else (DINO_W, DINO_H)
+    return _hitbox(DINO_X, y, w, h)
+
+
 class TRexGame:
     def __init__(self, seed: int | None = None):
         self.reset(seed)
@@ -100,8 +127,7 @@ class TRexGame:
         return (DUCK_W, DUCK_H) if self.ducking else (DINO_W, DINO_H)
 
     def dino_box(self):
-        w, h = self.dino_size
-        return _hitbox(DINO_X, self.dino_y, w, h)
+        return dino_hitbox(self.dino_y, self.ducking)
 
     def next_obstacles(self, n: int = 2) -> list[Obstacle]:
         """The nearest obstacles still ahead of (or touching) the dino."""
@@ -114,8 +140,9 @@ class TRexGame:
         if self.done:
             return False
 
-        self._apply_action(action)
-        self._move_dino()
+        self.dino_y, self.dino_vy, self.ducking = dino_physics(
+            self.dino_y, self.dino_vy, action
+        )
         self._move_world()
         self._spawn_obstacles()
 
@@ -132,24 +159,6 @@ class TRexGame:
         return not self.done
 
     # ------------------------------------------------------------------
-    def _apply_action(self, action: int):
-        if action == JUMP and self.on_ground:
-            self.dino_vy = JUMP_VELOCITY
-            self.ducking = False
-        # Ducking = holding DUCK. In mid-air the same key makes you fall faster.
-        self.ducking = action == DUCK and self.on_ground
-        self._fast_fall = action == DUCK and not self.on_ground
-
-    def _move_dino(self):
-        if self.on_ground and self.dino_vy <= 0:
-            self.dino_y, self.dino_vy = 0.0, 0.0
-            return
-        g = GRAVITY * (FAST_FALL if self._fast_fall else 1.0)
-        self.dino_vy -= g
-        self.dino_y += self.dino_vy
-        if self.dino_y <= 0:   # landed
-            self.dino_y, self.dino_vy = 0.0, 0.0
-
     def _move_world(self):
         for o in self.obstacles:
             o.x -= self.speed

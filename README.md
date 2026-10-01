@@ -8,7 +8,7 @@ A learning project: build a T-Rex Runner simulation from scratch, expose it as a
 | # | Milestone | Status |
 |---|-----------|--------|
 | 1 | Game sim + human play mode (Pygame) | done |
-| 2 | Tests: determinism, collisions, solvability | todo |
+| 2 | Tests: determinism, collisions, solvability | done |
 | 3 | Gymnasium env + random agent | todo |
 | 4 | Rule-based baseline agent | todo |
 | 5 | PPO (Stable-Baselines3) | todo |
