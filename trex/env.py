@@ -125,6 +125,10 @@ class TRexEnv(gym.Env):
         pygame.event.pump()    # keeps the window responsive
         return self._renderer.draw(self.game, [f"action: {ACTION_NAMES[self._last_action]}"])
 
+    def toggle_fullscreen(self):
+        if self._renderer is not None and self.render_mode == "human":
+            self._renderer.toggle_fullscreen()
+
     def close(self):
         if self._renderer is not None:
             self._renderer.close()
