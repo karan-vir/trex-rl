@@ -56,3 +56,53 @@ Score depends only on time survived, so every perfect run gets the identical sco
 
     python scripts/evaluate.py rule
     python scripts/watch.py rule
+
+## Testing the rule on the REAL Chrome dino game
+
+`scripts/chrome_dino_agent.js` is a line-for-line port of the rule, run inside
+chrome://dino. It presses keys like a person (keydown/keyup events) and only reads
+the game's state to decide.
+
+### How the real game's numbers map onto our 12-number view
+
+| What the agent needs | Our sim | Chrome's game |
+|---|---|---|
+| speed (px per tick) | `game.speed` | `Runner.instance_.currentSpeed` |
+| distance to obstacle | `o.x - (DINO_X + 44)` | `o.xPos - (tRex.xPos + 44)` |
+| obstacle height off ground | `o.y` (0 / 30 / 60) | ground line minus the obstacle's underside: 0 / 25 / 50 |
+| on the ground? | `dino_y <= 0` | `!tRex.jumping` |
+
+The three pterodactyl heights in the real game fall into the same three categories
+(jump / duck / ignore), which is why the thresholds 20 and 45 still work.
+
+### What is verified, and what is not
+
+Verified (by tests in the browser pane, not in Chrome itself):
+- JS and Python make identical decisions on 570 hand-picked situations (0 mismatches).
+- The observation mapping gives the expected numbers for a mid-height pterodactyl.
+- The script runs end to end against a mock of `Runner`: starts the game, plays,
+  survives, records a crash with its cause, and restarts. It holds the jump key until
+  landing (no early releases during play).
+
+NOT verified: anything about the real game. The mock is my own stand-in, so passing it
+says the plumbing works, not that the dino survives in Chrome. The internal names
+(`tRex.groundYPos`, `horizon.obstacles`, ...) come from my memory of Chrome's source and
+may differ in the current version; if the script throws, that is the first place to look.
+
+### Predictions (written down BEFORE running, to compare against the real result)
+
+1. Single cacti: fine, as in our sim.
+2. **Groups of 2-3 cacti** (up to 75 px wide, we only had single ones): the window of
+   good jump timing shrinks, so it may fail at low speed on triple large cacti.
+3. Jumps in Chrome get higher at higher speeds (`-10 - speed/10`), unlike our fixed
+   jump, which should make things easier, not harder.
+4. Pterodactyls only appear after speed reaches ~8.5, so they show up later.
+5. Overall: expect it to work for a while, then die to something our sim never showed it.
+   That gap, between the simulator we trained on and the real thing, is called the
+   sim-to-real gap. Closing it is a real research problem.
+
+### To run it
+
+1. Open chrome://dino, DevTools (Cmd+Option+J), Console tab.
+2. Paste the script, then `dinoAgent.start({ episodes: 3, maxScore: 1500 })`.
+3. Keep the tab in front. Results appear in the console and in `dinoAgent.results`.
