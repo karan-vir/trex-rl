@@ -230,3 +230,22 @@ chromedino.com posts every finished game to `/inc/set.php` (name from a cookie, 
 duration, obstacles passed, jump counts), automatically and unconditionally. Setting a
 nickname registers it on their server (`/inc/nick.php`, with "already taken" handling). All my
 runs blocked outgoing POSTs, so nothing has been submitted.
+
+### Leaderboard gate (added to scripts/chrome_dino_agent.js)
+
+The built-in browser pane cannot show `window.prompt()`, and the site's Nickname button
+uses it, so a nickname cannot be claimed there (no network request is ever made). So the
+real run happens in the person's own Chrome, and the script protects the leaderboard:
+
+- Score posts to `/inc/set.php` are **blocked by default** (XHR, fetch and sendBeacon).
+- `dinoAgent.start({ submitAt: 4300, episodes: 5 })` plays until a run reaches 4300, stops,
+  and shows a `confirm()` dialog with the exact score and the nickname. OK lets that one post
+  through; Cancel discards it. A crash below the target is never posted.
+- The site only submits a score that beats the session's best, and ignores very low scores.
+
+Tested in the pane with a stub underneath the gate that swallowed every POST, so nothing real
+was sent: Cancel -> blocked; OK -> exactly one post passes (body `name=...&score=...&t=...&o=...`);
+default run -> a new best is blocked.
+
+The score post carries duration, obstacles passed and jump counts, so the site can sanity-check
+that a score matches real play. A genuine run of the bot produces consistent numbers.

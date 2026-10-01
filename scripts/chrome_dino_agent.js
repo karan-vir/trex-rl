@@ -9,6 +9,13 @@
  *      Keep the tab visible and in front: browsers throttle hidden tabs.
  *   4. Stop any time with dinoAgent.stop().  Results: dinoAgent.results
  *
+ * LEADERBOARD (chromedino.com posts every finished game to /inc/set.php automatically)
+ *   This script BLOCKS those score submissions by default. To allow one on purpose:
+ *       dinoAgent.start({ submitAt: 4300, episodes: 5 })
+ *   Runs that crash below 4300 are never posted. When a run reaches 4300 the script stops it
+ *   and asks you, in a dialog, whether to submit that exact score. OK = submit, Cancel = discard.
+ *   The name used is whatever you set with the site's own "Nickname" button (cookie `name`).
+ *
  * It presses keys the same way a person would (dispatches keydown/keyup events);
  * it only READS the game's state to decide.
  *
@@ -131,15 +138,57 @@
 
   const score = (r) => Math.ceil(r.distanceMeter.getActualDistance(Math.ceil(r.distanceRan)));
 
+  // ---- Score gate: nothing reaches the leaderboard unless you say yes -----------------
+  const gate = { installed: false, allow: false, blocked: [], sent: [] };
+  const isScoreUrl = (u) => /\/inc\/set\.php/.test(String(u));
+  function installGate() {
+    if (gate.installed) return;
+    gate.installed = true;
+    const open = XMLHttpRequest.prototype.open, send = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (m, u, ...rest) {
+      this.__dinoUrl = u; this.__dinoMethod = m;
+      return open.call(this, m, u, ...rest);
+    };
+    XMLHttpRequest.prototype.send = function (body) {
+      if (isScoreUrl(this.__dinoUrl) && String(this.__dinoMethod).toUpperCase() !== 'GET') {
+        const rec = { url: String(this.__dinoUrl), body: String(body).slice(0, 300) };
+        if (!gate.allow) { gate.blocked.push(rec); return; }
+        gate.sent.push(rec);
+      }
+      return send.call(this, body);
+    };
+    const fetch0 = window.fetch;
+    window.fetch = function (u, o) {
+      if (isScoreUrl(u) && String((o && o.method) || 'GET').toUpperCase() !== 'GET' && !gate.allow) {
+        gate.blocked.push({ url: String(u) });
+        return Promise.resolve(new Response('{}'));
+      }
+      return fetch0.apply(this, arguments);
+    };
+    const beacon0 = navigator.sendBeacon && navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = function (u, d) {
+      if (isScoreUrl(u) && !gate.allow) { gate.blocked.push({ url: String(u) }); return true; }
+      return beacon0 ? beacon0(u, d) : false;
+    };
+  }
+  const currentName = () => {
+    const m = document.cookie.match(/(^| )name=([^;]+)/);
+    return (window.user_name || (m && decodeURIComponent(m[2])) || '(no nickname set: it would post as Anonym)');
+  };
+
   // ---- Episode loop --------------------------------------------------------------
   function start(options = {}) {
-    const { episodes = 3, maxScore = 1500, ...opts } = options;
+    const { episodes = 3, submitAt = null, ...rest } = options;
+    const { maxScore = submitAt === null ? 1500 : Infinity, ...opts } = rest;
+    installGate();                                         // always: block score posts unless allowed
     const Runner = window.Runner;
     if (!Runner || !Runner.instance_) throw new Error('No Runner.instance_ here: open the dino game');
     S.running = true;
     S.results = [];
     let frame = 0, lastObs = null, lastAction = 'NOOP', restartAt = 0, lastKick = 0;
-    console.log(`[dinoAgent] ${episodes} episodes, stop at score ${maxScore}`, { ...DEFAULTS, ...opts });
+    console.log(`[dinoAgent] ${episodes} episodes, ` +
+      (submitAt === null ? `stop at score ${maxScore}; score posts BLOCKED` : `will offer to submit at ${submitAt}; below that nothing is posted`),
+      { ...DEFAULTS, ...opts });
 
     function finish(outcome) {
       const r = Runner.instance_;
@@ -185,6 +234,17 @@
         lastObs = observe(r);
         lastAction = decide(lastObs, opts);
         apply(lastAction, r, frame);
+        if (submitAt !== null && score(r) >= submitAt) {   // target reached: ask the human
+          const reached = score(r);
+          releaseKeys();
+          const ok = window.confirm(
+            `The agent reached score ${reached}.\n\nSubmit it to the chromedino.com leaderboard as "${currentName()}"?\n\nOK = submit   Cancel = discard`);
+          gate.allow = ok;
+          finish(ok ? 'submitted' : 'declined');
+          r.gameOver();                                    // the site posts the score here, if allowed
+          gate.allow = false;
+          return done();
+        }
         if (score(r) >= maxScore) {                        // survived long enough
           finish('survived');
           if (S.results.length >= episodes) { r.gameOver(); return done(); }
@@ -206,7 +266,7 @@
   function stop() { S.running = false; releaseKeys(); console.log('[dinoAgent] stopped'); }
 
   window.dinoAgent = {
-    start, stop, decide, observe, motion,
+    start, stop, decide, observe, motion, gate,
     get results() { return S.results; },
     get running() { return S.running; },
   };
