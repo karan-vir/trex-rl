@@ -13,12 +13,13 @@
  * LEADERBOARD (chromedino.com posts every finished game to /inc/set.php automatically)
  *   This script BLOCKS those score submissions by default. Two ways to allow them on purpose:
  *
- *   1. AUTO, no questions asked:   dinoAgent.start({ episodes: 30, submit: 'top5' })
- *        Plays all 30 episodes straight. Whenever a run ends with a score ABOVE the current
- *        5th place of the day (re-read from the site before every run), that score is posted,
- *        under the nickname you set with the site's own Nickname button. Anything at or below
- *        5th place is never posted. Every post is announced in the console. It refuses to start
- *        without a nickname, so nothing is ever posted as "Anonym".
+  *   1. AUTO, no questions asked:   dinoAgent.start({ episodes: 30, submit: 'top2' })
+ *        'top1' .. 'top5' = the place you are aiming for. Plays all the episodes straight.
+ *        Whenever a run ends with a score ABOVE the current score of that place (re-read from
+ *        the site before every run), it is posted under the nickname you set with the site's own
+ *        Nickname button. Anything at or below it is never posted. Every decision is announced
+ *        in the console. It refuses to start without a nickname, so nothing is ever posted as
+ *        "Anonym".
  *   2. ASK FIRST at a fixed score:  dinoAgent.start({ submitAt: 5600, episodes: 30 })
  *        Plays on; when a run ends at or above 5600, a dialog shows the exact score and asks.
  *
@@ -34,7 +35,7 @@
  *     how fast obstacles actually move instead of trusting the number.
  */
 (() => {
-  const VERSION = 'v5-auto-top5';
+  const VERSION = 'v6-topN';
   const DEFAULTS = { lead: 12, widthAware: true, arcCenter: 16.5 };
   const DINO_W = 44, HITBOX_SHRINK = 4;
   const KEY = { JUMP: 32, DUCK: 40, RESTART: 13 };
@@ -163,7 +164,7 @@
   const score = (r) => Math.ceil(r.distanceMeter.getActualDistance(Math.ceil(r.distanceRan)));
 
   // ---- Score gate: nothing reaches the leaderboard unless you say yes -----------------
-  const gate = { installed: false, policy: null, blocked: [], sent: [], decisions: [], threshold: null };
+  const gate = { installed: false, policy: null, blocked: [], sent: [], decisions: [], threshold: null, rank: 5 };
   const isScoreUrl = (u) => /\/inc\/set\.php/.test(String(u));
   function installGate() {
     if (gate.installed) return;
@@ -208,20 +209,21 @@
   // ---- Leaderboard: the score of 5th place of the day, read fresh from the site -----------
   // The list is <div class="high-scores"><h2>5 highest scores of the day:</h2><ul><li>
   // <span class="user">..</span><span class="result">NNNN</span></li>... (best first).
-  async function readFifthPlace() {
+  async function readPlace(n) {
     const html = await (await fetch('/', { cache: 'no-store' })).text();
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const h = [...doc.querySelectorAll('h2')].find((x) => /highest scores of the day/i.test(x.textContent));
     if (!h) throw new Error('leaderboard not found on the page');
     const scores = [...h.parentElement.querySelectorAll('.result')]
       .map((n) => Number(n.textContent.trim())).filter((n) => Number.isFinite(n));
-    if (scores.length < 5) return 0;                       // board not full: any score gets in
-    return Math.min(...scores.slice(0, 5));
+    if (scores.length < n) return 0;                       // board not full that far: any score gets in
+    return scores.slice(0, 5).sort((a, b) => b - a)[n - 1];
   }
+  const readFifthPlace = () => readPlace(5);
   async function refreshThreshold() {
     try {
-      const t = await readFifthPlace();
-      if (t !== gate.threshold) console.log(`[dinoAgent] 5th place of the day is now ${t}`);
+      const t = await readPlace(gate.rank);
+      if (t !== gate.threshold) console.log(`[dinoAgent] place ${gate.rank} of the day is now ${t}`);
       gate.threshold = t;
     } catch (e) {
       gate.threshold = null;                               // unknown: block everything
@@ -232,10 +234,12 @@
 
   function start(options = {}) {
     const { episodes = 3, submit = null, submitAt = null, stopAt = null, ...rest0 } = options;
-    const { stopAfterSubmit = submit !== 'top5', ...rest } = rest0;
+    const { stopAfterSubmit = submit === null, ...rest } = rest0;
     const { maxScore = stopAt !== null ? stopAt : (submit || submitAt !== null) ? Infinity : 1500, ...opts } = rest;
-    if (submit !== null && submit !== 'top5') throw new Error("submit must be 'top5' (or leave it out)");
-    if (submit === 'top5' && !hasNickname()) {
+    const rankMatch = submit === null ? null : /^top([1-5])$/.exec(String(submit));
+    if (submit !== null && !rankMatch) throw new Error("submit must be 'top1' ... 'top5' (or leave it out)");
+    if (rankMatch) gate.rank = Number(rankMatch[1]);
+    if (submit !== null && !hasNickname()) {
       throw new Error('No nickname set. Click the Nickname button on the page and set one first, so nothing is posted as Anonym.');
     }
     installGate();                                         // always: block score posts unless allowed
@@ -245,11 +249,11 @@
       S.alert0 = window.alert;
       window.alert = (msg) => console.log('[dinoAgent] (site alert, not shown)', String(msg).slice(0, 300));
     }
-    if (submit === 'top5') {
+    if (submit !== null) {
       gate.policy = (posted) => {
         const beats = gate.threshold !== null && posted > gate.threshold;
-        if (beats) console.log(`[dinoAgent] SUBMITTING ${posted} as "${currentName()}" (5th place of the day was ${gate.threshold})`);
-        else console.log(`[dinoAgent] not submitting ${posted} (5th place of the day: ${gate.threshold})`);
+        if (beats) console.log(`[dinoAgent] SUBMITTING ${posted} as "${currentName()}" (place ${gate.rank} of the day was ${gate.threshold})`);
+        else console.log(`[dinoAgent] not submitting ${posted} (place ${gate.rank} of the day: ${gate.threshold})`);
         return { asked: false, allowed: beats, threshold: gate.threshold };
       };
       refreshThreshold();
@@ -276,7 +280,7 @@
       o.next ? o.next.type.slice(0, 5) + o.next.size : null, +o.speed.toFixed(1),
     ]) && ring.length > 90 && ring.shift();
     console.log(`[dinoAgent] ${episodes} episodes, ` +
-      (submit === 'top5' ? `auto-submit anything above 5th place of the day, as "${currentName()}"` : submitAt === null ? `stop at score ${maxScore}; score posts BLOCKED` : `plays on; at game over, scores >= ${submitAt} are offered to you; below that nothing is posted`),
+      (submit !== null ? `auto-submit anything above place ${gate.rank} of the day, as "${currentName()}"` : submitAt === null ? `stop at score ${maxScore}; score posts BLOCKED` : `plays on; at game over, scores >= ${submitAt} are offered to you; below that nothing is posted`),
       { ...DEFAULTS, ...opts });
 
     function finish(outcome) {
@@ -330,7 +334,7 @@
           if (stopAfterSubmit && last && last.posted && last.posted.asked) return done();   // you answered
           if (S.results.length >= episodes) return done();
           restartAt = now + 1300;
-          if (submit === 'top5') refreshThreshold();       // board may have changed
+          if (submit !== null) refreshThreshold();       // board may have changed
         } else if (now >= restartAt) {
           key('keydown', KEY.RESTART); key('keyup', KEY.RESTART);   // Enter restarts
           restartAt = 0; resetMotion(); lastDist = -1; lastProgress = now;
@@ -352,7 +356,7 @@
           const last = S.results[S.results.length - 1];
           if ((stopAfterSubmit && last.posted && last.posted.asked) || S.results.length >= episodes) return done();
           restartAt = now + 1300;
-          if (submit === 'top5') refreshThreshold();
+          if (submit !== null) refreshThreshold();
         }
       }
       requestAnimationFrame(tick);
@@ -376,7 +380,7 @@
 
   window.dinoAgent = {
     version: VERSION,
-    start, stop, decide, observe, motion, gate, readFifthPlace,
+    start, stop, decide, observe, motion, gate, readPlace, readFifthPlace,
     // print the flight recorder of crash number i:  dinoAgent.trace(0)
     trace(i) { const t = (S.results[i] || {}).trace; if (t) console.table(t.map((x) => ({ frame: x[0], dinoY: x[1], air: x[2], duck: x[3], action: x[4], dist0: x[5], obs0: x[6], flyY0: x[7], dist1: x[8], obs1: x[9], speed: x[10] }))); return t; },
     get results() { return S.results; },

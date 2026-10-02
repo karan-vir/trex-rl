@@ -369,3 +369,19 @@ Progress of the rule-based agent on the real game:
 
 Remaining weakness: mid-height pterodactyls hit while the dino is still airborne (about 10 of 15
 logged crashes). Not yet explained or fixed; the flight recorder exists to find out.
+
+## v6: choose the place to aim for (`submit: 'top1'` ... `'top5'`)
+
+`dinoAgent.start({ episodes: 100, submit: 'top2' })` posts a finished run only if its score is
+above the CURRENT score of that place of the day (re-read before every run). Verified in the
+pane against the real board (ranks 1-5 read as 24230, 13004, 6470, 5548, 5322), a bad rank is
+rejected, and a fake board with 2nd place at 80 auto-posted a run that ended at 100.
+
+### What top 2 asks for (arithmetic, not a promise)
+
+2nd place today is 13004, so the run must end above 13004. Score is distance x 0.025, so that is
+about 520,000 px. At the top speed (13 px per tick at 60 ticks/s) that is ~40,000 ticks, about
+11 minutes without one mistake, passing on the order of 1,000 obstacles at short gaps. The best
+real run so far is 6470 and the median is ~1,500, so doubling the best needs a much lower
+per-obstacle failure rate than the rule has now. Expect many attempts, and the pterodactyl fix
+is what would move the odds most.
