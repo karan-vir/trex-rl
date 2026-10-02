@@ -40,18 +40,38 @@
  *     how fast obstacles actually move instead of trusting the number.
  */
 (() => {
-  const VERSION = 'v9-clean-landing';
-  const DEFAULTS = { lead: 12, widthAware: true, arcCenter: 16.5 };
+  const VERSION = 'v10-fast-fall';
+  const DEFAULTS = { lead: 12, widthAware: true, arcCenter: 16.5, fastFall: true, minLeadLarge: 6.5, minLeadSmall: 5.0 };
+  const GRAVITY = 0.6, RELEASE_HEIGHT = 10;   // let go of duck this close to the ground (clean landing)
   const DINO_W = 44, HITBOX_SHRINK = 4;
   const KEY = { JUMP: 32, DUCK: 40, RESTART: 13 };
+
+  // Ticks until touchdown from height y (px) with upward velocity vy; fast = fast fall (velocity 1 down, displacement x3).
+  function ticksToLand(y, vy, fast) {
+    let t = 0;
+    if (fast) vy = -1;
+    while (y > 0 && t < 80) { y += vy * (fast ? 3 : 1); vy -= GRAVITY; t++; }
+    return t;
+  }
 
   // ---- The decision rule (pure function; same logic as rule_based.py) ---------------
   // obs: { hasObstacle, speed (px per 1/60 s), dist (px from dino's nose), width (px),
   //        flyY (px off the ground), onGround }
   function decide(obs, opts = {}) {
-    const { lead, widthAware, arcCenter } = { ...DEFAULTS, ...opts };
+    const { lead, widthAware, arcCenter, fastFall, minLeadLarge, minLeadSmall } = { ...DEFAULTS, ...opts };
     if (!obs.hasObstacle) return 'NOOP';
     const arrivesIn = obs.dist / obs.speed;                 // distance -> time
+    // Airborne and already past the previous obstacle? If a normal landing would leave less than
+    // the minimum workable warning for this one, but a fast fall would leave enough, fall fast.
+    // (Real traces: most deaths were landing with the next group only ~25 px away.)
+    if (fastFall && !obs.onGround && obs.speedDrop && obs.dist > 0 && obs.flyY < 45) {
+      return obs.flyY >= 20 ? 'DUCK' : 'FALL';             // a fast fall is under way: keep it up until touchdown
+    }
+    if (fastFall && !obs.onGround && obs.dist > 0 && obs.vy !== undefined && obs.vy <= 0 && obs.flyY < 45) {
+      const need = obs.flyY >= 20 ? 1.0 : (obs.height >= 45 ? minLeadLarge : minLeadSmall);
+      const slow = ticksToLand(obs.dinoY, obs.vy, false), quick = ticksToLand(obs.dinoY, obs.vy, true);
+      if (arrivesIn - slow < need && need <= arrivesIn - quick) return obs.flyY >= 20 ? 'DUCK' : 'FALL';
+    }
     if (obs.flyY >= 45) return 'NOOP';                      // high pterodactyl: flies over us
     if (obs.flyY >= 20) return arrivesIn < lead ? 'DUCK' : 'NOOP';   // mid: duck under
     // cactus or low pterodactyl: jump. A wide obstacle needs the high part of the arc to
@@ -108,12 +128,12 @@
     const o = ahead[0], o2 = ahead[1];
     const base = {
       speed: effectiveSpeed(r, o), nominalSpeed: r.currentSpeed, onGround: !t.jumping,
-      ducking: !!t.ducking, speedDrop: !!t.speedDrop, dinoY: groundBottom - t.config.HEIGHT - t.yPos,
+      ducking: !!t.ducking, speedDrop: !!t.speedDrop, vy: -t.jumpVelocity, dinoY: groundBottom - t.config.HEIGHT - t.yPos,
     };
     const describe = (ob) => ob && {
       dist: ob.xPos - noseX,
       flyY: groundBottom - (ob.yPos + ob.typeConfig.height),   // height of its underside
-      type: ob.typeConfig.type, size: ob.size, width: ob.width,
+      type: ob.typeConfig.type, size: ob.size, width: ob.width, height: ob.typeConfig.height,
     };
     if (!o) return { ...base, hasObstacle: false };
     return { ...base, hasObstacle: true, ...describe(o), next: describe(o2) || null };
@@ -127,7 +147,7 @@
     document.dispatchEvent(e);
   }
 
-  const S = { running: false, results: [], jumpDown: false, jumpFrame: 0, duckDown: false, duckPressedInJump: false, groundFrames: 0 };
+  const S = { running: false, results: [], jumpDown: false, jumpFrame: 0, duckDown: false, duckPressedInJump: false, releasedNearGround: false };
 
   function apply(action, r, frame) {
     const t = r.tRex;
@@ -141,25 +161,26 @@
       S.jumpDown = true;
       S.jumpFrame = frame;
     }
-    // DUCK. On the ground it crouches. In the air it starts the fast fall. Press ONCE per jump:
-    //  - every new press resets the fall speed to its start, so re-pressing every frame (v1-v7) made
-    //    the dino fall at a constant ~3 px per tick and land on pterodactyls it should have ducked under;
-    //  - at touchdown the game turns a fast fall into a duck. If we press again while it still
-    //    reports "jumping" at ground level (seen in v8: 13-27 frames stuck there, duck flickering
-    //    1,0,1,0 and getting hit on the standing frames), we restart the fast fall at ground level.
-    // So: one press per jump, and if the dino sits at ground level still "jumping" for 3+ frames,
-    // let go of the key so the game can finish landing; we press again once it is on the ground.
-    const atGroundStillJumping = t.jumping && t.yPos >= t.groundYPos - 1;
-    S.groundFrames = atGroundStillJumping ? S.groundFrames + 1 : 0;
-    if (!t.jumping) S.duckPressedInJump = false;
-    if (action === 'DUCK') {
-      if (t.jumping) {
-        if (!S.duckPressedInJump) { key('keydown', KEY.DUCK); S.duckPressedInJump = true; S.duckDown = true; }
-        else if (S.groundFrames >= 3 && S.duckDown) { key('keyup', KEY.DUCK); S.duckDown = false; }
-      } else {
-        if (!t.ducking) key('keydown', KEY.DUCK);
-        S.duckDown = true;
+    // DUCK / FALL. On the ground DUCK crouches (FALL does nothing there). In the air both start the
+    // fast fall. Rules learned from the real traces:
+    //  - press ONCE per jump: every new press resets the fall speed, so re-pressing every frame (v1-v7)
+    //    made the dino fall at a constant ~3 px per tick and land on pterodactyls;
+    //  - if a fast fall touches down on the ground exactly, the game turns it into a duck and its
+    //    physics then runs ~15x slower, leaving the dino unable to jump for about a second (v8/v9:
+    //    13-27 frames stuck, 21 of 21 never recovered before the crash). So let go of the key just
+    //    before touchdown (RELEASE_HEIGHT px) to land normally, and press DUCK again on the ground;
+    //  - never let go of the key while stuck at ground level: a ducking dino is safe from a mid
+    //    pterodactyl, a standing one is not (v9 stood the dino up and lost).
+    const airborneWant = action === 'DUCK' || action === 'FALL';
+    if (!t.jumping) { S.duckPressedInJump = false; S.releasedNearGround = false; }
+    if (airborneWant && t.jumping) {
+      if (!S.duckPressedInJump) { key('keydown', KEY.DUCK); S.duckPressedInJump = true; S.duckDown = true; }
+      else if (S.duckDown && t.speedDrop && !S.releasedNearGround && (t.groundYPos - t.yPos) <= RELEASE_HEIGHT) {
+        key('keyup', KEY.DUCK); S.duckDown = false; S.releasedNearGround = true;     // land cleanly
       }
+    } else if (action === 'DUCK') {                          // on the ground
+      if (!t.ducking) key('keydown', KEY.DUCK);
+      S.duckDown = true;
     } else if (S.duckDown) {
       key('keyup', KEY.DUCK);
       S.duckDown = false;
@@ -170,7 +191,7 @@
     if (S.jumpDown) key('keyup', KEY.JUMP);
     if (S.duckDown) key('keyup', KEY.DUCK);
     S.jumpDown = S.duckDown = false;
-    S.duckPressedInJump = false; S.groundFrames = 0;
+    S.duckPressedInJump = false; S.releasedNearGround = false;
   }
 
   // chrome://dino has r.playing. Older copies (chromedino.com) don't. There `activated` is not

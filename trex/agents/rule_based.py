@@ -35,7 +35,7 @@ def ticks_to_land(y: float, vy: float, fast: bool) -> int:
 class RuleBasedAgent:
     def __init__(self, lead_ticks: float = 12.0, width_aware: bool = False,
                  arc_center: float = 15.5, speed_scale: float = 1.0,
-                 fast_fall: bool = False):
+                 fast_fall: bool = False, min_lead_large: float = 6.5, min_lead_small: float = 5.0):
         # How many ticks before an obstacle arrives we react. Too late and we hit it on
         # the way up; too early and we land on it. Measured: 6..18 all survive every
         # seed, 4 and 22+ fail every seed. 12 is the middle of that window.
@@ -53,6 +53,9 @@ class RuleBasedAgent:
         # Fast fall: once past an obstacle, if the NEXT one would arrive before a normal landing
         # leaves time to act, press duck (once) to drop to the ground sooner.
         self.fast_fall = fast_fall
+        # Smallest warning (ticks before the obstacle arrives) with which a jump still clears it:
+        # the jump has to be above the cactus top by the time the nose reaches it (measured: ~5.6 ticks for 50 px).
+        self.min_lead_large, self.min_lead_small = min_lead_large, min_lead_small
 
     def act(self, obs) -> int:
         if obs[_I["obs0_width"]] == 0:                 # nothing ahead
@@ -65,16 +68,14 @@ class RuleBasedAgent:
         arrives_in = dist / speed                                            # ticks until contact
 
         if not on_ground and self.fast_fall and dist > 0:
-            # airborne, and the obstacle ahead is past the one we jumped over: can we get down in time?
+            # Airborne, and the obstacle ahead is past the one we jumped over: if a normal landing
+            # would leave less than the MINIMUM workable warning, but a fast fall would leave enough,
+            # fall fast. (Real traces: the dino lands with the next group only ~25 px away.)
             y = obs[_I["dino_y"]] * Y_SCALE
             vy = obs[_I["dino_vy"]] * VY_SCALE
             if vy <= 0 and fly_y < 45:                       # descending; a high pterodactyl needs nothing
-                if fly_y >= 20:
-                    need = 1.0                               # mid pterodactyl: just be down and ducking
-                else:
-                    width = obs[_I["obs0_width"]] * SIZE_SCALE
-                    need = (self.arc_center - (width + DINO_W - 2 * HITBOX_SHRINK) / (2 * speed)
-                            if self.width_aware else self.lead_ticks)
+                height = obs[_I["obs0_height"]] * SIZE_SCALE
+                need = 1.0 if fly_y >= 20 else (self.min_lead_large if height >= 45 else self.min_lead_small)
                 slow, quick = ticks_to_land(y, vy, False), ticks_to_land(y, vy, True)
                 if arrives_in - slow < need <= arrives_in - quick:
                     return DUCK

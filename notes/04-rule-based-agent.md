@@ -491,3 +491,46 @@ v9 (`v9-clean-landing`): press duck once per jump, never again while still jumpi
 ground level still "jumping" for 3+ frames, release the key so the game finishes landing, then press
 again once it is on the ground. NOT yet verified against the real engine. Check in the next file:
 frames at `dinoY 0` with `air 1` before a pterodactyl hit should drop to ~0.
+
+## v9 on the real game: konqueror 2nd of all time (18,792), and what v9 got wrong
+
+Verified on the site: **konqueror 18,792, 2nd all-time** (behind Anonymo 20,156), 1st of the day.
+The v9 file has 40 episodes: median 2,431, mean 3,622, best 18,792, two posts (13,018 and 18,792),
+7 of 40 above 5,000.
+
+Killers (v9): large cactus group 24, pterodactyl 15, small cactus 1. Pterodactyls fell from about
+two thirds of crashes (v7) to 37%, and cacti became the main killer.
+
+### v9's landing handler made things worse
+
+Frames of v9 episode 4 (pterodactyl): one duck press, fast fall at 3-5 px/frame (good), touchdown
+`dinoY 0` with `duck 1` (the dino IS ducking, safe) ... then my rule let go of the key after 3 frames
+"stuck at ground level", the dino stood up, still in the "jumping" state, and the pterodactyl hit it.
+In all 21 long "ground level but still jumping" sequences (13-27 frames) in all traces, none ended
+before the crash; all 16 sequences that did end were 1 frame (normal landings).
+
+Best explanation (inferred, not confirmed against the game's code): when a fast fall touches down
+exactly on the ground, the game turns it into a duck and the dino's animation state changes; the jump
+physics scales its step by that state's frame time (125 ms for DUCKING instead of 16.7 ms), so the
+remaining landing takes about a second. During that time the dino cannot jump, but if it is ducking it
+is safe from a mid pterodactyl.
+
+### The cactus crashes are the same thing
+
+My first classification of the 30 cactus crashes was wrong (the first jump is before the trace window).
+Reading the raw frames of the 18,792 run: the dino is at 88 px with the next 3-cactus group 211 px away,
+lands only when it is 25 px away (2 ticks of warning), cannot jump again in time, takes off late and is
+hit. 25 of the 30 cactus crashes look like this: landing too late for the next obstacle.
+
+### v10 (fast-fall)
+
+- Rule: airborne, past the previous obstacle, descending; if a normal landing would leave less than the
+  minimum workable warning (6.5 ticks for a large cactus, 5 for a small one, 1 for a mid pterodactyl) but
+  a fast fall would leave enough, press duck (once). The fall continues until touchdown.
+- Landing: let go of the key 10 px above the ground so the game lands normally (no duck conversion,
+  no slow landing); press duck again on the ground if a duck is wanted. Never let go while stuck.
+- Simulator (300 seeds, chrome_like): cactus deaths 25 -> 6, survivors 270 -> 290. The first simulator
+  test of fast fall showed no gain because it demanded the ideal jump timing instead of the minimum
+  workable one. The simulator has no slow-landing state, so it cannot test the landing fix.
+- NOT verified against the real engine. Check in the next file: frames stuck at `dinoY 0` with
+  `air 1` before a hit should be 0, and cactus deaths should fall.
