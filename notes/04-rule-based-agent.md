@@ -330,3 +330,25 @@ are missing, which points to the page stalling (the loop did not run for a while
 landing the dino on the cactus once it resumed. Cause not identified.
 
 Traces of the pterodactyl crashes have not been looked at yet; that is the next evidence to get.
+
+## v5: no fixed target, auto-submit above 5th place (`submit: 'top5'`)
+
+`dinoAgent.start({ episodes: 30, submit: 'top5' })` plays 30 episodes straight. At game over,
+if the score is above the CURRENT 5th place of the day (read fresh from the page's
+`.high-scores` list before every run), it is posted automatically, with no dialog, under the
+nickname set with the site's own Nickname button. Otherwise it is never posted. It refuses to
+start without a nickname so nothing is posted as Anonym, and it prints a line for every
+decision (`SUBMITTING n ...` / `not submitting n ...`).
+
+How the site decides to post (read from its game.js): it only posts a score that beats the
+personal best of the nickname (`score > personalBest`), after a read-only GET to
+`/inc/check.php?score=N` whose text it shows in an `alert()`. So for a name whose best is 4300,
+only scores above 4300 are ever posted. The script logs those site alerts to the console instead
+of letting a modal popup freeze the run.
+
+Tested in the pane with a stub under the gate (nothing real sent) and a fake leaderboard:
+parser read the real 5th place (4300); no-nickname guard refused; 5th=80 -> a run ending at 100
+posted automatically with no dialog and the run continued; 5th=5000 -> not posted.
+
+Bug fixed on the way: decisions from an earlier start() leaked into the next run's result
+(`decisionIdx` now starts at the current length).
