@@ -352,3 +352,20 @@ posted automatically with no dialog and the run continued; 5th=5000 -> not poste
 
 Bug fixed on the way: decisions from an earlier start() leaked into the next run's result
 (`decisionIdx` now starts at the current length).
+
+## Result of the v5 auto-submit run
+
+Verified on chromedino.com afterwards (read-only): **konqueror 6470, 3rd of the day**, above
+joshua D 5548 and win 5322, below cesar 13004 and Anonym 24230 (`get_best` for konqueror: 6470).
+It took about 3 to 4 attempts. It does not enter the all-time top 5 (5th place there is 13004).
+
+Progress of the rule-based agent on the real game:
+
+| version | change | typical result |
+|---|---|---|
+| v1 | fixed jump lead | 2 of 10 episodes survive past score 400; dies by ~170 |
+| v2 | width-aware jump + measured speed | 6 of 6 survive to 400; median ~1470 over 10 attempts, best 3435 |
+| v5 | no target, auto-submit above 5th place | 6470 within 3-4 attempts |
+
+Remaining weakness: mid-height pterodactyls hit while the dino is still airborne (about 10 of 15
+logged crashes). Not yet explained or fixed; the flight recorder exists to find out.
