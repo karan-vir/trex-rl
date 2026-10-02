@@ -131,8 +131,13 @@ def dino_hitbox(y: float, ducking: bool):
 
 class TRexGame:
     def __init__(self, seed: int | None = None, chrome_like: bool = False,
-                 motion_scale: float = 1.0):
+                 motion_scale: float = 1.0, duck_resets_fall: bool = False):
         self.chrome_like = chrome_like
+        # Real-game fast fall: pressing DUCK in mid-air sets the fall velocity to 1 and triples
+        # the displacement; it then accelerates. Every NEW press resets the velocity to 1, so a
+        # script that re-sends the key every frame never accelerates (measured: ~3 px per tick).
+        # duck_resets_fall=True emulates that bug; False is a single press / a held key.
+        self.duck_resets_fall = duck_resets_fall
         # Real-game quirk: obstacles can move slower than the reported speed. On a 120 Hz
         # screen chromedino.com moves them in whole pixels per frame (floor), measured at
         # ~0.86-0.87x the reported speed. The reported (observed) speed stays unchanged.
@@ -150,6 +155,7 @@ class TRexGame:
         self.done = False
         self.dino_y = 0.0
         self.dino_vy = 0.0
+        self.dropping = False     # fast fall (speed drop) active
         self.ducking = False
         self.obstacles: list[Obstacle] = []
         self._recent: list[str] = []             # last obstacle kinds (chrome-like duplicate rule)
@@ -179,9 +185,12 @@ class TRexGame:
         if self.done:
             return False
 
-        self.dino_y, self.dino_vy, self.ducking = dino_physics(
-            self.dino_y, self.dino_vy, action, self.speed if self.chrome_like else None
-        )
+        if self.chrome_like:
+            self._chrome_dino_step(action)
+        else:
+            self.dino_y, self.dino_vy, self.ducking = dino_physics(
+                self.dino_y, self.dino_vy, action
+            )
         self._move_world()
         self._spawn_obstacles()
 
@@ -198,6 +207,29 @@ class TRexGame:
         return not self.done
 
     # ------------------------------------------------------------------
+    def _chrome_dino_step(self, action: int):
+        """The real game's dino, tick by tick: displacement first, then gravity."""
+        y, vy = self.dino_y, self.dino_vy
+        on_ground = y <= 0
+        if action == JUMP and on_ground:
+            vy = JUMP_VELOCITY + self.speed * JUMP_SPEED_BONUS
+        self.ducking = action == DUCK and on_ground
+        if action == DUCK and not on_ground:
+            if not self.dropping or self.duck_resets_fall:
+                self.dropping, vy = True, -1.0        # fast fall starts (or restarts) at velocity 1
+        elif action != DUCK:
+            self.dropping = False
+        if on_ground and vy <= 0:
+            self.dino_y, self.dino_vy = 0.0, 0.0
+            return
+        y += vy * (3.0 if self.dropping else 1.0)     # speed drop triples the displacement
+        vy -= GRAVITY
+        if not self.dropping and y > JUMP_CAP_HEIGHT and vy > JUMP_CAP_VELOCITY:
+            vy = JUMP_CAP_VELOCITY
+        if y <= 0:                                    # landed
+            y, vy, self.dropping = 0.0, 0.0, False
+        self.dino_y, self.dino_vy = y, vy
+
     def _move_world(self):
         move = self.speed * self.motion_scale
         for o in self.obstacles:

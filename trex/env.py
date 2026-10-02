@@ -47,6 +47,7 @@ class TRexEnv(gym.Env):
         max_episode_steps: int = 10_000,
         chrome_like: bool = False,
         motion_scale: float = 1.0,
+        duck_resets_fall: bool = False,
     ):
         super().__init__()
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -60,7 +61,8 @@ class TRexEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=-3.0, high=3.0, shape=(len(OBS_NAMES),), dtype=np.float32
         )
-        self.game = TRexGame(chrome_like=chrome_like, motion_scale=motion_scale)
+        self.game = TRexGame(chrome_like=chrome_like, motion_scale=motion_scale,
+                             duck_resets_fall=duck_resets_fall)
         self._renderer = None
         self._last_action = NOOP
 

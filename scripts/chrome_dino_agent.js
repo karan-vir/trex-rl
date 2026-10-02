@@ -40,7 +40,7 @@
  *     how fast obstacles actually move instead of trusting the number.
  */
 (() => {
-  const VERSION = 'v7-persist';
+  const VERSION = 'v8-duck-once';
   const DEFAULTS = { lead: 12, widthAware: true, arcCenter: 16.5 };
   const DINO_W = 44, HITBOX_SHRINK = 4;
   const KEY = { JUMP: 32, DUCK: 40, RESTART: 13 };
@@ -108,7 +108,7 @@
     const o = ahead[0], o2 = ahead[1];
     const base = {
       speed: effectiveSpeed(r, o), nominalSpeed: r.currentSpeed, onGround: !t.jumping,
-      ducking: !!t.ducking, dinoY: groundBottom - t.config.HEIGHT - t.yPos,
+      ducking: !!t.ducking, speedDrop: !!t.speedDrop, dinoY: groundBottom - t.config.HEIGHT - t.yPos,
     };
     const describe = (ob) => ob && {
       dist: ob.xPos - noseX,
@@ -131,18 +131,23 @@
 
   function apply(action, r, frame) {
     const t = r.tRex;
-    // Jump: hold the key until we land (letting go early cuts a jump short).
-    if (action === 'JUMP' && !S.jumpDown) {
+    // JUMP. Hold the key until we land (letting go early cuts a jump short). If a new jump is
+    // wanted on the very frame we land, release the old press AND press again in the same
+    // frame: the old code released on that frame and lost the new jump (seen in the traces).
+    const jumpFinished = S.jumpDown && !t.jumping && frame - S.jumpFrame >= 2;
+    if (jumpFinished) { key('keyup', KEY.JUMP); S.jumpDown = false; }
+    if (action === 'JUMP' && !S.jumpDown && !t.jumping) {
       key('keydown', KEY.JUMP);
       S.jumpDown = true;
       S.jumpFrame = frame;
-    } else if (S.jumpDown && !t.jumping && frame - S.jumpFrame >= 2) {
-      key('keyup', KEY.JUMP);
-      S.jumpDown = false;
     }
-    // Duck: on the ground it crouches; in the air it makes you fall faster.
+    // DUCK. On the ground it crouches. In the air it starts the fast fall. IMPORTANT: press
+    // once. Every new press resets the fall speed to its starting value, so the old code, which
+    // re-pressed on every frame, fell at a constant ~3 px per tick (slower than not pressing at all,
+    // measured in the traces) and landed on pterodactyls it should have ducked under.
     if (action === 'DUCK') {
-      if (t.jumping || !t.ducking) key('keydown', KEY.DUCK);
+      const needPress = t.jumping ? !t.speedDrop : !t.ducking;
+      if (needPress) key('keydown', KEY.DUCK);
       S.duckDown = true;
     } else if (S.duckDown) {
       key('keyup', KEY.DUCK);
@@ -306,7 +311,7 @@
       frame, Math.round(o.dinoY), o.onGround ? 0 : 1, o.ducking ? 1 : 0, a[0],
       o.hasObstacle ? Math.round(o.dist) : null, o.hasObstacle ? o.type.slice(0, 5) + o.size : null,
       o.hasObstacle ? Math.round(o.flyY) : null, o.next ? Math.round(o.next.dist) : null,
-      o.next ? o.next.type.slice(0, 5) + o.next.size : null, +o.speed.toFixed(1),
+      o.next ? o.next.type.slice(0, 5) + o.next.size : null, +o.speed.toFixed(1), o.speedDrop ? 1 : 0,
     ]) && ring.length > 100 && ring.shift();
     console.log(`[dinoAgent] ${episodes} episodes, ` +
       (submit !== null ? `auto-submit anything above place ${gate.rank} of the day, as "${currentName()}"` : submitAt === null ? `stop at score ${maxScore}; score posts BLOCKED` : `plays on; at game over, scores >= ${submitAt} are offered to you; below that nothing is posted`),
@@ -409,7 +414,7 @@
   }
 
   window.dinoAgent = {
-    version: VERSION,
+    version: VERSION, _apply: apply,
     start, stop, decide, observe, motion, gate, readPlace, readFifthPlace,
     saved: readLog, download: downloadSaved,
     clearSaved() { localStorage.removeItem(LOG_KEY); console.log('[dinoAgent] saved results cleared'); },

@@ -410,3 +410,54 @@ none above 7000 and none near 13004.
 
 v7 also refuses to start a second run while one is active (two loops sharing state corrupted
 each other in my own pane test).
+
+## ROOT CAUSE FOUND: my script's duck key (v8-duck-once)
+
+The 10-episode file in `runs/` (v7, full 100-frame traces) showed what 98 earlier crashes only hinted at.
+
+**Evidence.** In every mid-height pterodactyl crash (episodes 2, 5, 6, 7, 9) the dino jumps a cactus,
+the agent starts ducking in the air as intended (the pterodactyl is already 200+ px away), and then
+falls far too slowly:
+
+| episode | fall speed while pressing DUCK | fall speed not pressing |
+|---|---|---|
+| 2 | 1.6 px/frame | 2.6 |
+| 5 | 1.5 | 1.4 |
+| 6 | 1.5 | 1.7 |
+| 7 | 1.6 | 2.9 |
+| 9 | 1.4 | 2.6 |
+
+Pressing duck was SLOWER than doing nothing. In episodes 2 and 7 the dino even sat at ground level for
+16 frames with the game still in "jumping" state and died there.
+
+**Mechanism.** In the game, a duck press in mid-air sets the fall velocity to 1 and triples the
+displacement; it then accelerates. Every NEW press resets the velocity to 1. My script re-sent the key
+on every frame, so the velocity was reset ~120 times a second and the dino fell at a constant ~1.5 px per
+frame (~3 px per tick) instead of accelerating to 20+. A human presses once.
+
+**Proof in the simulator.** I added the real mechanics to `chrome_like` (`_chrome_dino_step`, with
+`duck_resets_fall`) and checked the jump against the arc measured on the real game (mean error 2.8 px,
+apex 88 vs 87, airtime 33 vs 34). Same rule, 300 seeds, up to 16000 ticks:
+
+| agent | survived | deaths |
+|---|---|---|
+| duck re-sent every frame (what the script did) | 180/300 | 96 pterodactyl, 24 cactus |
+| duck pressed once | 266/300 | **7 pterodactyl**, 27 cactus |
+
+So the bug explains the pterodactyl pattern. The simulator is still milder than the real game (it decides
+once per tick, the real agent 120 times a second), so the absolute numbers will not transfer.
+
+**A second, smaller bug.** At landing the old code released the jump key on the same frame the next
+jump was wanted, so the new jump was lost (episode 4: low pterodactyl, `J` decided at the landing frame
+but never started; episode 3: two `J`s). Fixed: release and press in the same frame.
+
+**Tried and NOT shipped.** `fast_fall` in the Python rule (drop early once past an obstacle if the next
+arrives soon): 263/300 vs 266/300 without it, so no gain. It stays off.
+
+**What is still unexplained.** About 25-30 of 300 simulated runs, and 4 of the 10 real ones, end on a
+group of large cacti. The traces (episodes 0, 3, 8) show the dino landing too late to jump again for
+the next obstacle. A working fast fall did not fix that in the simulator.
+
+**What to check in the next real run** (`speedDrop` is now the last column of each trace row):
+fall speed while pressing DUCK should now be clearly FASTER than while not pressing (the table above
+should flip), and pterodactyl deaths should fall sharply.

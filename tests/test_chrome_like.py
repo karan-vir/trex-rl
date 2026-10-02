@@ -6,7 +6,7 @@ from trex.agents.rule_based import RuleBasedAgent
 from trex.env import OBS_NAMES, TRexEnv
 from trex.game import (
     CHROME_MIN_GAP, CHROME_MIN_SPEED, CHROME_MULTIPLE_SPEED, CHROME_PTERO_HEIGHTS, CLEAR_TICKS,
-    DINO_X, GAP_COEFFICIENT, JUMP, MAX_DUPLICATES, NOOP, PTERO, START_SPEED, WORLD_WIDTH,
+    DINO_X, DUCK, GAP_COEFFICIENT, JUMP, MAX_DUPLICATES, NOOP, PTERO, START_SPEED, WORLD_WIDTH,
     CACTUS_LARGE, CACTUS_SMALL, Obstacle, TRexGame, _hitbox, _overlap, dino_hitbox, dino_physics,
 )
 
@@ -58,7 +58,9 @@ def test_gap_after_an_obstacle_grows_with_its_width_and_the_speed():
                 a, b = g.obstacles[-2], g.obstacles[-1]
                 gap = b.x - (a.x + a.w)
                 lo = a.w * (g.speed - 0.1) + CHROME_MIN_GAP[a.kind] * GAP_COEFFICIENT
-                assert gap >= lo * 0.97, (a.kind, a.size, gap, lo)
+                # a pterodactyl flies at speed +/- 0.8, so the spacing after it drifts as it moves
+                slack = 0.88 if a.kind == PTERO else 0.97
+                assert gap >= lo * slack, (a.kind, a.size, gap, lo)
 
 
 def test_never_more_than_two_identical_kinds_in_a_row():
@@ -163,3 +165,62 @@ def survivable(rows):
 @pytest.mark.parametrize("seed", range(6))
 def test_perfect_player_can_survive_the_real_generator(seed):
     assert survivable(course_with_speeds(seed, 6000))
+
+
+# --- real fast-fall mechanics (measured on chromedino.com) ---------------------------------
+REAL_ARC = {1.1: 15, 2.6: 29, 4.1: 41, 5.6: 51, 7.1: 60, 8.6: 68, 10.1: 75, 11.6: 81, 13.1: 84,
+            14.6: 87, 16.1: 87, 17.6: 87, 19.1: 86, 20.6: 83, 22.1: 79, 23.6: 73, 25.1: 66,
+            26.6: 57, 28.1: 48, 29.6: 36, 31.1: 24, 32.6: 10, 34.1: 0}
+
+
+def chrome_jump_heights(speed=10.0, ticks=40):
+    g = TRexGame(0, chrome_like=True)
+    g.speed = speed
+    ys, action = [0.0], JUMP
+    for _ in range(ticks):
+        g._chrome_dino_step(action)
+        action = NOOP
+        ys.append(g.dino_y)
+    return ys
+
+
+def test_simulated_jump_matches_the_arc_measured_on_the_real_game():
+    ys = chrome_jump_heights()
+    def at(t):
+        i = int(t)
+        return ys[i] + (ys[min(i + 1, len(ys) - 1)] - ys[i]) * (t - i)
+    err = sum(abs(h - at(t)) for t, h in REAL_ARC.items()) / len(REAL_ARC)
+    assert err < 4.0, err
+    assert 84 <= max(ys) <= 91
+
+
+def fall_from(height, vy, action_per_tick, resets):
+    """Ticks to land from `height` (descending), pressing `action_per_tick` each tick."""
+    g = TRexGame(0, chrome_like=True, duck_resets_fall=resets)
+    g.dino_y, g.dino_vy = height, vy
+    for t in range(1, 80):
+        g._chrome_dino_step(action_per_tick)
+        if g.dino_y <= 0:
+            return t
+    return 80
+
+
+def test_one_duck_press_falls_much_faster_than_gravity_alone():
+    free = fall_from(80.0, -2.0, NOOP, resets=False)
+    once = fall_from(80.0, -2.0, DUCK, resets=False)      # held / pressed once
+    assert once < free * 0.7, (once, free)
+
+
+def test_pressing_duck_every_frame_is_slower_than_not_pressing_at_all():
+    # the bug found in the real traces: every new press resets the fall velocity to 1
+    free = fall_from(80.0, -2.0, NOOP, resets=False)
+    spam = fall_from(80.0, -2.0, DUCK, resets=True)
+    assert spam > free, (spam, free)
+
+
+def test_fast_fall_ends_on_landing_and_does_not_carry_over():
+    g = TRexGame(0, chrome_like=True)
+    g.dino_y, g.dino_vy = 20.0, -1.0
+    for _ in range(40):
+        g._chrome_dino_step(DUCK)
+    assert g.dino_y == 0 and not g.dropping
