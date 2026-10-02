@@ -49,22 +49,39 @@
   }
 
   // ---- Measure the real world speed ---------------------------------------------------
-  // Track every obstacle's x between frames; the average px moved per 1/60 s is the true speed.
-  const motion = { v: null, seen: new WeakMap() };
-  function updateMotion(r, now) {
+  // Track every obstacle's x between frames; px moved per 1/60 s is the true speed. Only
+  // sample while the game is actually running (a frozen crash screen would read as speed 0),
+  // average over a window, and prefer an obstacle's OWN speed (pterodactyls fly at +/-0.8).
+  const WINDOW = 60, OWN_MIN = 8;
+  const motion = { all: [], seen: new WeakMap(), own: new WeakMap(), v: null };
+  const rate = (arr) => {
+    let dx = 0, dt = 0;
+    for (const s of arr) { dx += s[0]; dt += s[1]; }
+    return dt > 0 ? (dx / dt) * (1000 / 60) : null;
+  };
+  function resetMotion() { motion.all.length = 0; motion.v = null; }
+  function updateMotion(r, now, playing) {
     for (const o of r.horizon.obstacles) {
       const p = motion.seen.get(o);
-      if (p && now - p.t > 1) {
-        const v = ((p.x - o.xPos) / (now - p.t)) * (1000 / 60);
-        motion.v = motion.v === null ? v : motion.v + 0.05 * (v - motion.v);   // smooth it
+      if (playing && p && now - p.t > 1 && now - p.t < 100) {
+        const sample = [p.x - o.xPos, now - p.t];
+        motion.all.push(sample);
+        if (motion.all.length > WINDOW) motion.all.shift();
+        motion.v = rate(motion.all);
+        const own = motion.own.get(o) || [];
+        own.push(sample);
+        if (own.length > 20) own.shift();
+        motion.own.set(o, own);
       }
       motion.seen.set(o, { x: o.xPos, t: now });
     }
   }
-  function effectiveSpeed(r) {
+  function effectiveSpeed(r, o) {
     const nominal = r.currentSpeed;
-    if (motion.v === null) return nominal * 0.87;           // before any measurement
-    return Math.min(nominal * 1.05, Math.max(nominal * 0.5, motion.v));
+    const own = o && motion.own.get(o);
+    let v = own && own.length >= OWN_MIN ? rate(own) : motion.all.length >= 10 ? motion.v : null;
+    if (v === null) v = nominal * 0.9;                       // before enough measurements
+    return Math.min(nominal * 1.05, Math.max(nominal * 0.5, v));
   }
 
   // ---- Read the game's state and translate it into the same terms as our sim --------
@@ -72,21 +89,19 @@
     const t = r.tRex;
     const noseX = t.xPos + t.config.WIDTH;
     const groundBottom = t.groundYPos + t.config.HEIGHT;   // y of the ground line
-    const o = r.horizon.obstacles.find((ob) => ob.xPos + ob.width > t.xPos);
+    const ahead = r.horizon.obstacles.filter((ob) => ob.xPos + ob.width > t.xPos);
+    const o = ahead[0], o2 = ahead[1];
     const base = {
-      speed: effectiveSpeed(r), nominalSpeed: r.currentSpeed, onGround: !t.jumping,
-      dinoY: groundBottom - t.config.HEIGHT - t.yPos,
+      speed: effectiveSpeed(r, o), nominalSpeed: r.currentSpeed, onGround: !t.jumping,
+      ducking: !!t.ducking, dinoY: groundBottom - t.config.HEIGHT - t.yPos,
+    };
+    const describe = (ob) => ob && {
+      dist: ob.xPos - noseX,
+      flyY: groundBottom - (ob.yPos + ob.typeConfig.height),   // height of its underside
+      type: ob.typeConfig.type, size: ob.size, width: ob.width,
     };
     if (!o) return { ...base, hasObstacle: false };
-    return {
-      ...base,
-      hasObstacle: true,
-      dist: o.xPos - noseX,
-      flyY: groundBottom - (o.yPos + o.typeConfig.height),  // height of its underside
-      type: o.typeConfig.type,
-      size: o.size,                                         // cacti in the group
-      width: o.width,
-    };
+    return { ...base, hasObstacle: true, ...describe(o), next: describe(o2) || null };
   }
 
   // ---- Keyboard ------------------------------------------------------------------
@@ -186,6 +201,14 @@
     S.running = true;
     S.results = [];
     let frame = 0, lastObs = null, lastAction = 'NOOP', restartAt = 0, lastKick = 0;
+    let lastDist = -1, lastProgress = performance.now(), prevTick = performance.now();
+    const ring = [];                                       // flight recorder: last ~0.75 s of play
+    const rec = (o, a) => ring.push([
+      frame, Math.round(o.dinoY), o.onGround ? 0 : 1, o.ducking ? 1 : 0, a[0],
+      o.hasObstacle ? Math.round(o.dist) : null, o.hasObstacle ? o.type.slice(0, 5) + o.size : null,
+      o.hasObstacle ? Math.round(o.flyY) : null, o.next ? Math.round(o.next.dist) : null,
+      o.next ? o.next.type.slice(0, 5) + o.next.size : null, +o.speed.toFixed(1),
+    ]) && ring.length > 90 && ring.shift();
     console.log(`[dinoAgent] ${episodes} episodes, ` +
       (submitAt === null ? `stop at score ${maxScore}; score posts BLOCKED` : `will offer to submit at ${submitAt}; below that nothing is posted`),
       { ...DEFAULTS, ...opts });
@@ -194,7 +217,7 @@
       const r = Runner.instance_;
       const res = {
         episode: S.results.length + 1, outcome, score: score(r), frames: frame,
-        speed: +r.currentSpeed.toFixed(2), measuredSpeed: motion.v && +motion.v.toFixed(2),
+        speed: +r.currentSpeed.toFixed(2), measuredSpeed: motion.v === null ? null : +motion.v.toFixed(2),
         distance: Math.round(r.distanceRan),
       };
       if (outcome === 'crash' && lastObs) {
@@ -204,8 +227,10 @@
           action: lastAction, wasOnGround: lastObs.onGround, dinoY: Math.round(lastObs.dinoY),
         });
       }
+      if (outcome === 'crash' || outcome === 'stuck') res.trace = ring.filter((_, i) => i % 3 === 0);
+      ring.length = 0;
       S.results.push(res);
-      console.log('[dinoAgent]', JSON.stringify(res));
+      console.log('[dinoAgent]', JSON.stringify({ ...res, trace: undefined }));
       releaseKeys();
       frame = 0; lastObs = null; lastAction = 'NOOP';
     }
@@ -214,7 +239,20 @@
       if (!S.running) return;
       const r = Runner.instance_;
       const now = performance.now();
-      updateMotion(r, now);
+      // A long gap between frames means the tab was hidden or the machine stalled. That is
+      // not the game freezing, and any speed samples across it are meaningless: start fresh.
+      if (now - prevTick > 500) { lastProgress = now; resetMotion(); }
+      prevTick = now;
+      updateMotion(r, now, isPlaying(r));
+
+      if (isPlaying(r)) {                                  // is the game actually advancing?
+        if (r.distanceRan !== lastDist) { lastDist = r.distanceRan; lastProgress = now; }
+        else if (now - lastProgress > 2500) {
+          console.warn('[dinoAgent] game seems frozen (distance not changing); logging and nudging');
+          finish('stuck'); lastProgress = now;
+          key('keydown', KEY.RESTART); key('keyup', KEY.RESTART);
+        }
+      }
 
       if (r.crashed) {
         if (!restartAt) {                                  // just crashed
@@ -223,7 +261,7 @@
           restartAt = now + 1300;
         } else if (now >= restartAt) {
           key('keydown', KEY.RESTART); key('keyup', KEY.RESTART);   // Enter restarts
-          restartAt = 0;
+          restartAt = 0; resetMotion(); lastDist = -1; lastProgress = now;
         }
       } else if (!isPlaying(r)) {
         if (now - lastKick > 1000) {                       // press jump to start the game
@@ -233,6 +271,7 @@
         frame++;
         lastObs = observe(r);
         lastAction = decide(lastObs, opts);
+        rec(lastObs, lastAction);
         apply(lastAction, r, frame);
         if (submitAt !== null && score(r) >= submitAt) {   // target reached: ask the human
           const reached = score(r);
@@ -267,6 +306,8 @@
 
   window.dinoAgent = {
     start, stop, decide, observe, motion, gate,
+    // print the flight recorder of crash number i:  dinoAgent.trace(0)
+    trace(i) { const t = (S.results[i] || {}).trace; if (t) console.table(t.map((x) => ({ frame: x[0], dinoY: x[1], air: x[2], duck: x[3], action: x[4], dist0: x[5], obs0: x[6], flyY0: x[7], dist1: x[8], obs1: x[9], speed: x[10] }))); return t; },
     get results() { return S.results; },
     get running() { return S.running; },
   };

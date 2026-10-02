@@ -71,6 +71,7 @@ CHROME_PTERO_HEIGHTS = (0, 25, 50)
 GAP_COEFFICIENT, MAX_GAP_COEFFICIENT = 0.6, 1.5
 MAX_CLUSTER, MAX_DUPLICATES = 3, 2
 CLEAR_TICKS = 180
+PTERO_SPEED_OFFSET = 0.8
 JUMP_SPEED_BONUS = 0.1
 JUMP_CAP_HEIGHT, JUMP_CAP_VELOCITY = 63.0, 5.0
 
@@ -83,6 +84,7 @@ class Obstacle:
     w: int            # total width (a group of 3 cacti is 3x the single width)
     h: int
     size: int = 1     # how many cacti are in the group
+    vx: float = 0.0   # extra leftward speed (real pterodactyls fly at speed +/- 0.8)
 
 
 def _hitbox(x: float, y: float, w: float, h: float):
@@ -199,7 +201,7 @@ class TRexGame:
     def _move_world(self):
         move = self.speed * self.motion_scale
         for o in self.obstacles:
-            o.x -= move
+            o.x -= move + o.vx * self.motion_scale
         before = len(self.obstacles)
         self.obstacles = [o for o in self.obstacles if o.x + o.w > 0]
         # an obstacle that scrolled off the left edge was dodged
@@ -240,7 +242,8 @@ class TRexGame:
         unit_w, h = CHROME_SIZES[kind]
         w = unit_w * size
         y = self.rng.choice(CHROME_PTERO_HEIGHTS) if kind == PTERO else 0
-        self.obstacles.append(Obstacle(kind, WORLD_WIDTH, y, w, h, size))
+        vx = self.rng.choice((-PTERO_SPEED_OFFSET, PTERO_SPEED_OFFSET)) if kind == PTERO else 0.0
+        self.obstacles.append(Obstacle(kind, WORLD_WIDTH, y, w, h, size, vx))
 
         min_gap = round(w * self.speed + CHROME_MIN_GAP[kind] * GAP_COEFFICIENT)
         gap = self.rng.uniform(min_gap, min_gap * MAX_GAP_COEFFICIENT)

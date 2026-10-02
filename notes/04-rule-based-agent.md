@@ -249,3 +249,45 @@ default run -> a new best is blocked.
 
 The score post carries duration, obstacles passed and jump counts, so the site can sanity-check
 that a score matches real play. A genuine run of the bot produces consistent numbers.
+
+## First run in the user's own Chrome (5 attempts, target 4300, no cap)
+
+| # | score | speed | killer | what the log says |
+|---|---|---|---|---|
+| 1 | 1108 | 13 | mid pterodactyl | `action DUCK`, still airborne at dinoY 0 (landing), ptero 21 px behind the nose |
+| 2 | 288 | 9.06 | mid pterodactyl | `DUCK` in the air at dinoY 38, ptero 19 px behind the nose |
+| 3 | 288 | 9.06 | (same as 2) | identical in every field except frames: 12842 vs 4138 (about the sum of attempts 1+2) |
+| 4 | **2992** | 13 | 3x large cactus | `NOOP` at dinoY 40, dist -23: came down on the group |
+| 5 | 96 | 7.17 | 3x large cactus | `NOOP` at dinoY 19 (still rising), **measured speed 0** |
+
+Best 2992. No attempt reached 4300, so no confirmation dialog appeared and nothing was
+submitted. (The score of 2992 was attempt 4, not the first.)
+
+### What is clearly wrong (my script)
+
+- **The speed estimator was corrupted.** It kept sampling while the game was frozen (crash
+  screen, hidden tab), so obstacle movement read as 0. Attempt 5 shows `measuredSpeed 0`;
+  with a speed of 0 the clamp falls back to half the real speed, the agent thinks obstacles
+  are twice as far in time, and jumps too late (dinoY 19 and rising when it hit).
+- **Attempt 3 is probably a duplicate** of 2: a freeze or hidden tab that the script logged
+  as a second crash. Pausing happens when a tab is hidden: the game stops and the script's
+  frame loop stops with it, and on return my code could not tell a pause from a freeze.
+
+### What is NOT explained
+
+Attempts 1-3 (3 of 5) were pterodactyl hits while the dino was still in the air or landing
+after jumping for something else. My simulator, even with the pterodactyl speed offset
+(+/-0.8) and the measured slowdown, survives 118/120 long runs and never dies to a
+pterodactyl, so the simulator is still missing something. Candidates, none verified:
+the real game's faster speed ramp on a 120 Hz screen, different collision boxes, or the
+gap between a jump and the next obstacle. I will not guess; the script now records evidence.
+
+### Changes made (not yet verified in a real run)
+
+- Speed is only sampled while the game is running, averaged over a window, and taken from the
+  nearest obstacle's own movement first (pterodactyls move at speed +/- 0.8).
+- A frame gap over 0.5 s (hidden tab) resets the estimator and the freeze timer.
+- Freeze detection: distance not changing for 2.5 s while "playing" is logged as `stuck`.
+- **Flight recorder:** each crash/stuck result carries `trace`, the last ~0.75 s of frames
+  (dino height, air/duck state, action, first two obstacles with distance and type, speed).
+  Print crash 0 with `dinoAgent.trace(0)`.
