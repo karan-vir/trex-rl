@@ -534,3 +534,32 @@ hit. 25 of the 30 cactus crashes look like this: landing too late for the next o
   workable one. The simulator has no slow-landing state, so it cannot test the landing fix.
 - NOT verified against the real engine. Check in the next file: frames stuck at `dinoY 0` with
   `air 1` before a hit should be 0, and cactus deaths should fall.
+
+## v10 tested in the REAL engine before the run (probe + short runs, posts blocked)
+
+Done in the built-in browser (120 frames/s) with a stub under the score gate; for the probe only the
+game's crash handling was disabled so the dino could be made to jump and fall repeatedly.
+
+**Probe: how the dino comes down, from the real game.**
+
+| mode | result |
+|---|---|
+| no duck, from 70 px | 19-21 frames, clean landing |
+| duck re-sent every frame (the old v1-v7 bug), from 70 px | never lands normally; **stuck at ground level, still "jumping", 204-205 frames** (3+ s), and the next trials had to wait 56-63 frames just to start |
+| one press held to the ground, from 70 px | 16 frames, clean |
+| one press held, from 12-16 px | **5 of 8 stuck** (about 107-117 frames, ~1 s), 0 of 4 from 20 px |
+| v10: one press, release 10 px above the ground, from 16/24/40/70 px | **0 stuck in 20 trials** |
+| from the TOP of the jump (88 px): none / held / v10 | 34.8 / 18.0 / 19.5 frames, i.e. v10 lands ~7.6 ticks sooner, 0 stuck in 12 |
+
+The stuck state is real and depends on the integer arithmetic of the fall: if the last fast-fall step
+lands exactly on the ground, the game turns the fall into a duck while still "jumping" (trace pattern
+`...3js 0jd 0jd 0jd`); an overshoot lands cleanly (`...1js 0d`). So v9's explanation ("my rule re-pressed")
+was wrong for that case, and its release-after-3-frames was harmful; v10's early release avoids the
+exact-landing case.
+
+**Full agent, real game, posts blocked** (4 episodes at caps 800 / 1987 / 3000, up to speed 13):
+all survived to the cap; 7 fast falls fired; longest stuck-at-ground streak 2 frames (a normal
+landing); one top-speed episode reached 3,000 without a crash. No crashes happened, so the
+crash-trace path was not exercised in this test.
+
+Not shown: that v10 beats v9 over many episodes. That needs the next real run (compare cactus deaths).
