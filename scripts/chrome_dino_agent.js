@@ -25,6 +25,11 @@
  *
  *   Optional in both: stopAt: 30000 ends a run by itself at that score.
  *
+ * NOTHING IS LOST ON A REFRESH: every finished episode (with its flight-recorder trace) is saved
+ * to the browser's localStorage. After a reload:  dinoAgent.saved()   (the list)
+ * To hand the data over as a file:                dinoAgent.download() (saves dino_results_*.json)
+ * To wipe it:                                     dinoAgent.clearSaved()
+ *
  * It presses keys the same way a person would (dispatches keydown/keyup events);
  * it only READS the game's state to decide.
  *
@@ -35,7 +40,7 @@
  *     how fast obstacles actually move instead of trusting the number.
  */
 (() => {
-  const VERSION = 'v6-topN';
+  const VERSION = 'v7-persist';
   const DEFAULTS = { lead: 12, widthAware: true, arcCenter: 16.5 };
   const DINO_W = 44, HITBOX_SHRINK = 4;
   const KEY = { JUMP: 32, DUCK: 40, RESTART: 13 };
@@ -232,7 +237,31 @@
   }
   const hasNickname = () => !!(window.user_name || /(^| )name=[^;]+/.test(document.cookie));
 
+  // ---- Persistence: results survive a page reload --------------------------------------
+  const LOG_KEY = 'dinoAgentLog';
+  const MAX_SAVED = 400;
+  const readLog = () => { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch (e) { return []; } };
+  function saveResult(res) {
+    try {
+      const log = readLog();
+      log.push({ at: new Date().toISOString(), version: VERSION, ...res });
+      while (log.length > MAX_SAVED) log.shift();
+      localStorage.setItem(LOG_KEY, JSON.stringify(log));
+    } catch (e) { console.warn('[dinoAgent] could not save the result (storage full?):', e.message); }
+  }
+  function downloadSaved() {
+    const log = readLog();
+    const blob = new Blob([JSON.stringify(log)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `dino_results_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    console.log(`[dinoAgent] saved ${log.length} episodes to ${a.download} (check your Downloads folder)`);
+    return log.length;
+  }
+
   function start(options = {}) {
+    if (S.running) throw new Error('A run is already in progress. Call dinoAgent.stop() first (two runs at once would corrupt each other).');
     const { episodes = 3, submit = null, submitAt = null, stopAt = null, ...rest0 } = options;
     const { stopAfterSubmit = submit === null, ...rest } = rest0;
     const { maxScore = stopAt !== null ? stopAt : (submit || submitAt !== null) ? Infinity : 1500, ...opts } = rest;
@@ -278,7 +307,7 @@
       o.hasObstacle ? Math.round(o.dist) : null, o.hasObstacle ? o.type.slice(0, 5) + o.size : null,
       o.hasObstacle ? Math.round(o.flyY) : null, o.next ? Math.round(o.next.dist) : null,
       o.next ? o.next.type.slice(0, 5) + o.next.size : null, +o.speed.toFixed(1),
-    ]) && ring.length > 90 && ring.shift();
+    ]) && ring.length > 100 && ring.shift();
     console.log(`[dinoAgent] ${episodes} episodes, ` +
       (submit !== null ? `auto-submit anything above place ${gate.rank} of the day, as "${currentName()}"` : submitAt === null ? `stop at score ${maxScore}; score posts BLOCKED` : `plays on; at game over, scores >= ${submitAt} are offered to you; below that nothing is posted`),
       { ...DEFAULTS, ...opts });
@@ -300,9 +329,10 @@
       const posted = gate.decisions.slice(decisionIdx).pop();
       if (posted) res.posted = posted;                     // what the site tried to post, and the answer
       decisionIdx = gate.decisions.length;
-      if (outcome === 'crash' || outcome === 'stuck') res.trace = ring.filter((_, i) => i % 3 === 0);
+      if (outcome === 'crash' || outcome === 'stuck') res.trace = ring.slice();   // full resolution
       ring.length = 0;
       S.results.push(res);
+      saveResult(res);
       console.log('[dinoAgent]', JSON.stringify({ ...res, trace: undefined }));
       releaseKeys();
       frame = 0; lastObs = null; lastAction = 'NOOP';
@@ -381,10 +411,12 @@
   window.dinoAgent = {
     version: VERSION,
     start, stop, decide, observe, motion, gate, readPlace, readFifthPlace,
+    saved: readLog, download: downloadSaved,
+    clearSaved() { localStorage.removeItem(LOG_KEY); console.log('[dinoAgent] saved results cleared'); },
     // print the flight recorder of crash number i:  dinoAgent.trace(0)
     trace(i) { const t = (S.results[i] || {}).trace; if (t) console.table(t.map((x) => ({ frame: x[0], dinoY: x[1], air: x[2], duck: x[3], action: x[4], dist0: x[5], obs0: x[6], flyY0: x[7], dist1: x[8], obs1: x[9], speed: x[10] }))); return t; },
     get results() { return S.results; },
     get running() { return S.running; },
   };
-  console.log(`[dinoAgent ${VERSION}] ready. Run: dinoAgent.start({ episodes: 3, maxScore: 1500 })`);
+  console.log(`[dinoAgent ${VERSION}] ready (${readLog().length} episodes saved from earlier). Run: dinoAgent.start({ episodes: 3, maxScore: 1500 })`);
 })();

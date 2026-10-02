@@ -385,3 +385,28 @@ about 520,000 px. At the top speed (13 px per tick at 60 ticks/s) that is ~40,00
 real run so far is 6470 and the median is ~1,500, so doubling the best needs a much lower
 per-obstacle failure rate than the rule has now. Expect many attempts, and the pterodactyl fix
 is what would move the odds most.
+
+## 98 real attempts (v6, aiming at top 2) and what was lost
+
+Console table of 98 episodes, transcribed from screenshots (counts may be off by one):
+median 892, mean 1232, best 6593, p90 2464; 14 reached 2000, 4 reached 3000, 2 reached 5000,
+none above 7000 and none near 13004.
+
+- Killers: pterodactyl 67 (68%), cactus 31. Of the pterodactyl crashes 61 were the mid-height
+  kind, 4 low, 2 high. **In all 61 mid-height cases the dino was airborne at the last frame**
+  (32 of them within 5 px of the ground, i.e. landing), and 28 of the 31 cactus crashes were
+  airborne too (22 of them a group of 3 large cacti). Almost every crash is a landing-time
+  problem, not a wrong decision.
+- Episode 64 scored 6593 (above the 6470 on the board) but was not posted: at that time the
+  script was reading the previous day's 2nd place (13004), so it correctly declined. The daily
+  board then reset (today's 2nd place became 6027), so 6593 would have been 2nd. Lesson: a
+  rank on a board that resets is a fragile target; the site itself only posts a new personal best.
+- The page was refreshed before the traces could be copied, which lost all 98 flight-recorder
+  traces. So v7 saves every episode to localStorage as it goes, keeps the full-resolution trace,
+  and has `dinoAgent.download()` to write them to a file.
+- A geometry argument (gap formula, jump length, fast fall) says a single cactus followed by a
+  mid pterodactyl should leave a few ticks of margin, so it does not explain the 61/61. The
+  traces are needed.
+
+v7 also refuses to start a second run while one is active (two loops sharing state corrupted
+each other in my own pane test).
