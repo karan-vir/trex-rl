@@ -2,7 +2,8 @@
  * Rule-based agent for the REAL Chrome dino game (chrome://dino, chromedino.com).
  * A port of trex/agents/rule_based.py - keep the two in sync.
  *
- * HOW TO RUN
+ * HOW TO RUN   (RELOAD the page first if an older copy was pasted: stale copies stack up
+ *               and an old copy's score gate would silently block a real submission)
  *   1. Open the game page, open DevTools (Cmd+Option+J), go to the Console tab.
  *   2. Paste this whole file and press Enter.
  *   3. Run:   dinoAgent.start({ episodes: 3, maxScore: 1500 })
@@ -26,6 +27,7 @@
  *     how fast obstacles actually move instead of trusting the number.
  */
 (() => {
+  const VERSION = 'v3-flight-recorder';
   const DEFAULTS = { lead: 12, widthAware: true, arcCenter: 16.5 };
   const DINO_W = 44, HITBOX_SHRINK = 4;
   const KEY = { JUMP: 32, DUCK: 40, RESTART: 13 };
@@ -305,11 +307,12 @@
   function stop() { S.running = false; releaseKeys(); console.log('[dinoAgent] stopped'); }
 
   window.dinoAgent = {
+    version: VERSION,
     start, stop, decide, observe, motion, gate,
     // print the flight recorder of crash number i:  dinoAgent.trace(0)
     trace(i) { const t = (S.results[i] || {}).trace; if (t) console.table(t.map((x) => ({ frame: x[0], dinoY: x[1], air: x[2], duck: x[3], action: x[4], dist0: x[5], obs0: x[6], flyY0: x[7], dist1: x[8], obs1: x[9], speed: x[10] }))); return t; },
     get results() { return S.results; },
     get running() { return S.running; },
   };
-  console.log('[dinoAgent] ready. Run: dinoAgent.start({ episodes: 3, maxScore: 1500 })');
+  console.log(`[dinoAgent ${VERSION}] ready. Run: dinoAgent.start({ episodes: 3, maxScore: 1500 })`);
 })();
