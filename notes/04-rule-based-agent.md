@@ -461,3 +461,33 @@ the next obstacle. A working fast fall did not fix that in the simulator.
 **What to check in the next real run** (`speedDrop` is now the last column of each trace row):
 fall speed while pressing DUCK should now be clearly FASTER than while not pressing (the table above
 should flip), and pterodactyl deaths should fall sharply.
+
+## v8 on the real game: it worked, and konqueror is 1st of the day
+
+The `runs/` file from the re-run holds 21 episodes (10 from v7, saved in localStorage, plus 11 from v8;
+nothing was lost by re-running).
+
+| | median | mean | best | killers |
+|---|---|---|---|---|
+| v7, duck re-sent every frame | 804 | 1,026 | 2,361 | pterodactyl 6, cactus 4 |
+| **v8, duck pressed once** | **2,764** | **3,928** | **9,559** | pterodactyl 7, cactus 4 |
+
+Fall speed while pressing DUCK: **1.50 px/frame in v7, 3.80 in v8** (not pressing: 2.7 in both), i.e.
+the fix flipped the effect as predicted. Episode 4 scored 9,559 and was auto-posted (`allowed: True`,
+threshold 6027). Verified on the site: **konqueror 9,559, 1st of the day** (above dinosaur 9,468);
+`get_best` for konqueror returns 9559. The all-time 5th place is 11,730.
+
+### The next bug, visible in the same traces
+
+All 7 remaining v8 pterodactyl crashes show the same thing: the fast fall now works, but when the dino
+reaches the ground it stays at `dinoY 0` with the game still in its "jumping" state for 13-27 frames,
+and the duck flag flips 1,0,1,0 on every frame (speedDrop false, ducking toggling). The pterodactyl
+hits on the frames where the dino is standing. Cause (from the script side): at touchdown the game
+turns a fast fall into a duck; my v8 rule then read "jumping and not fast-falling" as "press duck",
+which restarts the fast fall at ground level, every frame. I do not know the game's internals for
+this build, so this is inferred from the traces, not confirmed.
+
+v9 (`v9-clean-landing`): press duck once per jump, never again while still jumping; if the dino sits at
+ground level still "jumping" for 3+ frames, release the key so the game finishes landing, then press
+again once it is on the ground. NOT yet verified against the real engine. Check in the next file:
+frames at `dinoY 0` with `air 1` before a pterodactyl hit should drop to ~0.

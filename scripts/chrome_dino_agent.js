@@ -40,7 +40,7 @@
  *     how fast obstacles actually move instead of trusting the number.
  */
 (() => {
-  const VERSION = 'v8-duck-once';
+  const VERSION = 'v9-clean-landing';
   const DEFAULTS = { lead: 12, widthAware: true, arcCenter: 16.5 };
   const DINO_W = 44, HITBOX_SHRINK = 4;
   const KEY = { JUMP: 32, DUCK: 40, RESTART: 13 };
@@ -127,7 +127,7 @@
     document.dispatchEvent(e);
   }
 
-  const S = { running: false, results: [], jumpDown: false, jumpFrame: 0, duckDown: false };
+  const S = { running: false, results: [], jumpDown: false, jumpFrame: 0, duckDown: false, duckPressedInJump: false, groundFrames: 0 };
 
   function apply(action, r, frame) {
     const t = r.tRex;
@@ -141,14 +141,25 @@
       S.jumpDown = true;
       S.jumpFrame = frame;
     }
-    // DUCK. On the ground it crouches. In the air it starts the fast fall. IMPORTANT: press
-    // once. Every new press resets the fall speed to its starting value, so the old code, which
-    // re-pressed on every frame, fell at a constant ~3 px per tick (slower than not pressing at all,
-    // measured in the traces) and landed on pterodactyls it should have ducked under.
+    // DUCK. On the ground it crouches. In the air it starts the fast fall. Press ONCE per jump:
+    //  - every new press resets the fall speed to its start, so re-pressing every frame (v1-v7) made
+    //    the dino fall at a constant ~3 px per tick and land on pterodactyls it should have ducked under;
+    //  - at touchdown the game turns a fast fall into a duck. If we press again while it still
+    //    reports "jumping" at ground level (seen in v8: 13-27 frames stuck there, duck flickering
+    //    1,0,1,0 and getting hit on the standing frames), we restart the fast fall at ground level.
+    // So: one press per jump, and if the dino sits at ground level still "jumping" for 3+ frames,
+    // let go of the key so the game can finish landing; we press again once it is on the ground.
+    const atGroundStillJumping = t.jumping && t.yPos >= t.groundYPos - 1;
+    S.groundFrames = atGroundStillJumping ? S.groundFrames + 1 : 0;
+    if (!t.jumping) S.duckPressedInJump = false;
     if (action === 'DUCK') {
-      const needPress = t.jumping ? !t.speedDrop : !t.ducking;
-      if (needPress) key('keydown', KEY.DUCK);
-      S.duckDown = true;
+      if (t.jumping) {
+        if (!S.duckPressedInJump) { key('keydown', KEY.DUCK); S.duckPressedInJump = true; S.duckDown = true; }
+        else if (S.groundFrames >= 3 && S.duckDown) { key('keyup', KEY.DUCK); S.duckDown = false; }
+      } else {
+        if (!t.ducking) key('keydown', KEY.DUCK);
+        S.duckDown = true;
+      }
     } else if (S.duckDown) {
       key('keyup', KEY.DUCK);
       S.duckDown = false;
@@ -159,6 +170,7 @@
     if (S.jumpDown) key('keyup', KEY.JUMP);
     if (S.duckDown) key('keyup', KEY.DUCK);
     S.jumpDown = S.duckDown = false;
+    S.duckPressedInJump = false; S.groundFrames = 0;
   }
 
   // chrome://dino has r.playing. Older copies (chromedino.com) don't. There `activated` is not
