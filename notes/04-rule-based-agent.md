@@ -563,3 +563,34 @@ landing); one top-speed episode reached 3,000 without a crash. No crashes happen
 crash-trace path was not exercised in this test.
 
 Not shown: that v10 beats v9 over many episodes. That needs the next real run (compare cactus deaths).
+
+## v10 on the real game: worse than v9. Development stopped here.
+
+40 episodes (a partial run, force-stopped): median 1,298, mean 2,814, best 13,567 (v9: median 2,431,
+mean 3,622, best 18,792). Pterodactyl deaths fell from 15/40 to 1/40, which confirms the landing fix,
+but cactus deaths rose to 39/40, and no run beat the 18,792 on the board.
+
+**Why (read from the traces, not yet fixed).** 11 of the 40 episodes scored about 40-60, i.e. they died on
+the FIRST obstacle of a game. In those, the fast fall (`F`) fired while the dino was still in front of the
+cactus it was jumping over (for example at 19 px before the cactus, 63 px up), so it dropped onto the
+cactus. The rule's check `dist > 0` was meant to mean "previous obstacle cleared", but at the start of a
+game the only obstacle ahead is the one being jumped, and the estimate of how long a fast fall takes was
+too optimistic for that case (the probe measured it correctly only from the TOP of a jump, 88 px). The
+other 28 episodes look like v9. A guard such as "only fast-fall if the obstacle we jumped is already
+behind us" was not implemented or tested.
+
+**Best known script: v9** (`v9-clean-landing`, commit 86f404a). It produced konqueror's 18,792. To
+restore it:
+
+    git show 86f404a:scripts/chrome_dino_agent.js > scripts/chrome_dino_agent.js
+
+v8 (`v8-duck-once`) is the simpler version that already fixed the main bug (the duck key re-sent on
+every frame) and produced 9,559.
+
+## Final state of the project
+
+- Simulator, tests (71 passing), Gymnasium environment, rule-based agent, evaluation tool: done.
+- A `chrome_like` simulator mode that matches the real game's obstacle rules, jump arc (2.8 px mean
+  error) and fast-fall mechanics.
+- Real-game results on chromedino.com: konqueror 18,792, 2nd of all time, 1st of the day.
+- Not done: PPO and neuroevolution (milestones 5 and 6), the early-game fast-fall guard above.
