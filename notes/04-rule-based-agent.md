@@ -291,3 +291,42 @@ gap between a jump and the next obstacle. I will not guess; the script now recor
 - **Flight recorder:** each crash/stuck result carries `trace`, the last ~0.75 s of frames
   (dino height, air/duck state, action, first two obstacles with distance and type, speed).
   Print crash 0 with `dinoAgent.trace(0)`.
+
+## First leaderboard entry, and why the script no longer stops at the target
+
+Attempt 6 of the v3 run reached the target of 4300, the script stopped there and showed the
+confirmation dialog, and the person pressed OK. **konqueror, 4300, 5th place of the day**
+(verified on chromedino.com: 5 highest of the day were Anonym 24230, cesar 13004, joshua D
+5548, win 5322, konqueror 4300; the site's own lookup `get_best&name=konqueror` returned 4300).
+
+That also showed a design mistake of mine: stopping at the target froze the score at exactly
+the threshold, ending a run that might have gone on. Fixed in v4 (`v4-play-on`):
+
+- The agent keeps playing past `submitAt`. The confirmation happens when the site actually posts,
+  at game over, using the score inside the request (`score=...`).
+- Below the target: dropped silently, no dialog. At or above: dialog with the final score.
+  After an answer it stops (`stopAfterSubmit: false` keeps going). Optional ceiling `stopAt`.
+- Tested in the pane with a stub under the gate (nothing real sent): target 60 / ceiling 100
+  -> asked about 100 not 60; Cancel -> blocked; OK -> one post of 150; target 5000 / end 200 ->
+  silent block, no dialog.
+
+### v3 run: the other five attempts
+
+| # | score | killer |
+|---|---|---|
+| 1 | 223 | 3x cactus group, but dinoY 88 at the last recorded frame (see below) |
+| 2 | 801 | mid pterodactyl, `DUCK`, airborne at 39 |
+| 3 | 611 | 3x cactus group, `NOOP`, dinoY 11 |
+| 4 | 480 | mid pterodactyl, `DUCK`, airborne at 24 |
+| 5 | 1898 | mid pterodactyl, `DUCK`, landing (0) |
+| 6 | **4300** | submitted |
+
+Over the 15 attempts so far (old script and v3), mid-height pterodactyls killed about 10.
+
+**trace(0), read honestly.** The jump was timed correctly: take-off about 75 px before a 75 px
+wide group, an arc to 88 px, and the trace ends with the dino at 88 px above the group. A 50 px
+cactus cannot hit a dino at 88 px, so the crash happened after the last recorded frame. Frames
+are missing, which points to the page stalling (the loop did not run for a while) and the game
+landing the dino on the cactus once it resumed. Cause not identified.
+
+Traces of the pterodactyl crashes have not been looked at yet; that is the next evidence to get.

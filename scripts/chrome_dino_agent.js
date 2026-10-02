@@ -12,10 +12,13 @@
  *
  * LEADERBOARD (chromedino.com posts every finished game to /inc/set.php automatically)
  *   This script BLOCKS those score submissions by default. To allow one on purpose:
- *       dinoAgent.start({ submitAt: 4300, episodes: 5 })
- *   Runs that crash below 4300 are never posted. When a run reaches 4300 the script stops it
- *   and asks you, in a dialog, whether to submit that exact score. OK = submit, Cancel = discard.
- *   The name used is whatever you set with the site's own "Nickname" button (cookie `name`).
+ *       dinoAgent.start({ submitAt: 4300, episodes: 20 })
+ *   The agent KEEPS PLAYING past the target. Runs that end below 4300 are never posted. When a
+ *   run ends (crash) at or above 4300, the site tries to post that FINAL score; the script
+ *   catches it and asks you, in a dialog, whether to submit it. OK = submit, Cancel = discard.
+ *   After you answer, it stops (stopAfterSubmit: false keeps going). Optional ceiling:
+ *   stopAt: 30000 ends a run by itself at that score. The name is whatever you set with the
+ *   site's own "Nickname" button (cookie `name`).
  *
  * It presses keys the same way a person would (dispatches keydown/keyup events);
  * it only READS the game's state to decide.
@@ -27,7 +30,7 @@
  *     how fast obstacles actually move instead of trusting the number.
  */
 (() => {
-  const VERSION = 'v3-flight-recorder';
+  const VERSION = 'v4-play-on';
   const DEFAULTS = { lead: 12, widthAware: true, arcCenter: 16.5 };
   const DINO_W = 44, HITBOX_SHRINK = 4;
   const KEY = { JUMP: 32, DUCK: 40, RESTART: 13 };
@@ -156,7 +159,7 @@
   const score = (r) => Math.ceil(r.distanceMeter.getActualDistance(Math.ceil(r.distanceRan)));
 
   // ---- Score gate: nothing reaches the leaderboard unless you say yes -----------------
-  const gate = { installed: false, allow: false, blocked: [], sent: [] };
+  const gate = { installed: false, policy: null, blocked: [], sent: [], decisions: [] };
   const isScoreUrl = (u) => /\/inc\/set\.php/.test(String(u));
   function installGate() {
     if (gate.installed) return;
@@ -169,14 +172,18 @@
     XMLHttpRequest.prototype.send = function (body) {
       if (isScoreUrl(this.__dinoUrl) && String(this.__dinoMethod).toUpperCase() !== 'GET') {
         const rec = { url: String(this.__dinoUrl), body: String(body).slice(0, 300) };
-        if (!gate.allow) { gate.blocked.push(rec); return; }
+        const posted = Number(new URLSearchParams(String(body)).get('score'));
+        // The policy (set by start()) decides per post, from the score actually being posted.
+        const ask = gate.policy ? gate.policy(posted) : { asked: false, allowed: false };
+        gate.decisions.push({ score: posted, ...ask });
+        if (!ask.allowed) { gate.blocked.push(rec); return; }
         gate.sent.push(rec);
       }
       return send.call(this, body);
     };
     const fetch0 = window.fetch;
     window.fetch = function (u, o) {
-      if (isScoreUrl(u) && String((o && o.method) || 'GET').toUpperCase() !== 'GET' && !gate.allow) {
+      if (isScoreUrl(u) && String((o && o.method) || 'GET').toUpperCase() !== 'GET') {
         gate.blocked.push({ url: String(u) });
         return Promise.resolve(new Response('{}'));
       }
@@ -184,7 +191,7 @@
     };
     const beacon0 = navigator.sendBeacon && navigator.sendBeacon.bind(navigator);
     navigator.sendBeacon = function (u, d) {
-      if (isScoreUrl(u) && !gate.allow) { gate.blocked.push({ url: String(u) }); return true; }
+      if (isScoreUrl(u)) { gate.blocked.push({ url: String(u) }); return true; }
       return beacon0 ? beacon0(u, d) : false;
     };
   }
@@ -195,15 +202,22 @@
 
   // ---- Episode loop --------------------------------------------------------------
   function start(options = {}) {
-    const { episodes = 3, submitAt = null, ...rest } = options;
-    const { maxScore = submitAt === null ? 1500 : Infinity, ...opts } = rest;
+    const { episodes = 3, submitAt = null, stopAt = null, stopAfterSubmit = true, ...rest } = options;
+    const { maxScore = stopAt !== null ? stopAt : submitAt === null ? 1500 : Infinity, ...opts } = rest;
     installGate();                                         // always: block score posts unless allowed
+    gate.policy = submitAt === null ? null : (posted) => {
+      if (!(posted >= submitAt)) return { asked: false, allowed: false };   // below target: never post
+      const ok = window.confirm(
+        `The run ended with score ${posted}.\n\nSubmit it to the chromedino.com leaderboard as "${currentName()}"?\n\nOK = submit   Cancel = discard`);
+      return { asked: true, allowed: ok };
+    };
     const Runner = window.Runner;
     if (!Runner || !Runner.instance_) throw new Error('No Runner.instance_ here: open the dino game');
     S.running = true;
     S.results = [];
     let frame = 0, lastObs = null, lastAction = 'NOOP', restartAt = 0, lastKick = 0;
     let lastDist = -1, lastProgress = performance.now(), prevTick = performance.now();
+    let decisionIdx = 0;                                   // gate decisions made before this episode
     const ring = [];                                       // flight recorder: last ~0.75 s of play
     const rec = (o, a) => ring.push([
       frame, Math.round(o.dinoY), o.onGround ? 0 : 1, o.ducking ? 1 : 0, a[0],
@@ -212,7 +226,7 @@
       o.next ? o.next.type.slice(0, 5) + o.next.size : null, +o.speed.toFixed(1),
     ]) && ring.length > 90 && ring.shift();
     console.log(`[dinoAgent] ${episodes} episodes, ` +
-      (submitAt === null ? `stop at score ${maxScore}; score posts BLOCKED` : `will offer to submit at ${submitAt}; below that nothing is posted`),
+      (submitAt === null ? `stop at score ${maxScore}; score posts BLOCKED` : `plays on; at game over, scores >= ${submitAt} are offered to you; below that nothing is posted`),
       { ...DEFAULTS, ...opts });
 
     function finish(outcome) {
@@ -229,6 +243,9 @@
           action: lastAction, wasOnGround: lastObs.onGround, dinoY: Math.round(lastObs.dinoY),
         });
       }
+      const posted = gate.decisions.slice(decisionIdx).pop();
+      if (posted) res.posted = posted;                     // what the site tried to post, and the answer
+      decisionIdx = gate.decisions.length;
       if (outcome === 'crash' || outcome === 'stuck') res.trace = ring.filter((_, i) => i % 3 === 0);
       ring.length = 0;
       S.results.push(res);
@@ -259,6 +276,8 @@
       if (r.crashed) {
         if (!restartAt) {                                  // just crashed
           if (frame > 0) finish('crash');                  // ignore crashes we weren't playing
+          const last = S.results[S.results.length - 1];
+          if (stopAfterSubmit && last && last.posted && last.posted.asked) return done();   // you answered
           if (S.results.length >= episodes) return done();
           restartAt = now + 1300;
         } else if (now >= restartAt) {
@@ -275,21 +294,13 @@
         lastAction = decide(lastObs, opts);
         rec(lastObs, lastAction);
         apply(lastAction, r, frame);
-        if (submitAt !== null && score(r) >= submitAt) {   // target reached: ask the human
-          const reached = score(r);
+        if (score(r) >= maxScore) {                        // reached the ceiling: end the run
           releaseKeys();
-          const ok = window.confirm(
-            `The agent reached score ${reached}.\n\nSubmit it to the chromedino.com leaderboard as "${currentName()}"?\n\nOK = submit   Cancel = discard`);
-          gate.allow = ok;
-          finish(ok ? 'submitted' : 'declined');
-          r.gameOver();                                    // the site posts the score here, if allowed
-          gate.allow = false;
-          return done();
-        }
-        if (score(r) >= maxScore) {                        // survived long enough
+          r.gameOver();                                    // the site posts here (gate decides)
           finish('survived');
-          if (S.results.length >= episodes) { r.gameOver(); return done(); }
-          r.gameOver(); restartAt = now + 1300;
+          const last = S.results[S.results.length - 1];
+          if ((stopAfterSubmit && last.posted && last.posted.asked) || S.results.length >= episodes) return done();
+          restartAt = now + 1300;
         }
       }
       requestAnimationFrame(tick);
