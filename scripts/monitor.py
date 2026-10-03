@@ -79,7 +79,7 @@ th:first-child,td:first-child{text-align:left}th{color:var(--mute);font-weight:5
 <div class="row card" style="flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between"><span id="prog">–</span><span class="sub" id="eta"></span></div><div class="bar"><i id="barfill" style="width:0"></i></div></div>
 <div class="row" id="stats"></div>
 <div class="card"><div class="legend" id="legend"></div><canvas id="c"></canvas>
- <div class="note">Each point = 24 fixed-seed games, 120 Hz timing, no randomisation, deterministic play. A score of ≈6,195 means the game reached the 20,000-decision cap (survived), so the median saturates there; watch the <b>10th percentile</b> (how bad the unlucky games are) and the <b>mean</b>.</div></div>
+ <div class="note">One "decision" = one agent step (~1/60 s of game time, 1-2 display frames). Each point = 24 fixed-seed games, 120 Hz timing, no randomisation, deterministic play. A score of ≈6,195 means the game reached the 20,000-decision cap (about 333 s of play, survived), so the median saturates there; watch the <b>10th percentile</b> (how bad the unlucky games are) and the <b>mean</b>.</div></div>
 <div class="card" style="margin-top:12px;overflow-x:auto"><table id="tbl"></table></div>
 </div>
 <script>
@@ -95,14 +95,14 @@ function render(){
  const stalled=r.running&&r.age_s>600;
  $('chip').className='chip '+(stalled?'stall':r.running?'run':'done');$('chip').textContent=stalled?'stalled?':r.running?'training':'finished';
  if(last){const done=last.frames,tot=r.target;const pct=tot?Math.min(100,done/tot*100):0;
-  $('prog').innerHTML=`<b>${(done/1e6).toFixed(1)}M</b> ${tot?'of '+(tot/1e6).toFixed(0)+'M frames':'frames'} · ${last.minutes.toFixed(1)} min`;
+  $('prog').innerHTML=`<b>${(done/1e6).toFixed(1)}M</b> ${tot?'of '+(tot/1e6).toFixed(0)+'M decisions':'decisions'} · ${last.minutes.toFixed(1)} min`;
   $('barfill').style.width=pct+'%';
   if(r.running&&tot&&done>0){const rate=done/last.minutes;const left=(tot-done)/rate;$('eta').textContent='about '+(left<1?'<1':Math.round(left))+' min left'}else $('eta').textContent=r.running?'':'';
   const best=Math.max(...rows.map(x=>x.mean));
   $('stats').innerHTML=[['median',last.median],['mean',last.mean],['10th percentile',last.p10],['90th percentile',last.p90],['best mean so far',best]].map(([l,v])=>`<div class="card stat"><div class="v">${fmt(v)}</div><div class="l">${l}</div></div>`).join('')}
  $('legend').innerHTML=[['median','--c1'],['mean','--c2'],['10th percentile (worst games)','--c3'],['90th percentile','--c4']].map(([l,c])=>`<span><i style="background:var(${c})"></i>${l}</span>`).join('');
  draw(rows);
- $('tbl').innerHTML='<tr><th>frames (M)</th><th>minutes</th><th>median</th><th>mean</th><th>p10</th><th>p90</th><th>best game</th></tr>'+rows.slice(-12).reverse().map(x=>`<tr><td>${(x.frames/1e6).toFixed(1)}</td><td>${x.minutes.toFixed(1)}</td><td>${fmt(x.median)}</td><td>${fmt(x.mean)}</td><td>${fmt(x.p10)}</td><td>${fmt(x.p90)}</td><td>${fmt(x.max)}</td></tr>`).join('');
+ $('tbl').innerHTML='<tr><th>decisions (M)</th><th>minutes</th><th>median</th><th>mean</th><th>p10</th><th>p90</th><th>best game</th></tr>'+rows.slice(-12).reverse().map(x=>`<tr><td>${(x.frames/1e6).toFixed(1)}</td><td>${x.minutes.toFixed(1)}</td><td>${fmt(x.median)}</td><td>${fmt(x.mean)}</td><td>${fmt(x.p10)}</td><td>${fmt(x.p90)}</td><td>${fmt(x.max)}</td></tr>`).join('');
 }
 function draw(rows){const cv=$('c'),dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
  const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
