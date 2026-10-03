@@ -39,6 +39,7 @@ def main():
     ap.add_argument("model")
     ap.add_argument("--out", default="scripts/chrome_dino_policy.js")
     ap.add_argument("--version", default=None)
+    ap.add_argument("--cases", type=int, default=12, help="self-test vectors of each kind to embed")
     args = ap.parse_args()
 
     model = PPO.load(args.model, device="cpu")
@@ -49,7 +50,7 @@ def main():
     h, n_in = arrs[0].shape
     scales, q = [], []
     for a in arrs:                                     # int16 quantisation, one scale per tensor
-        sc = float(np.abs(a).max()) / 32767.0
+        sc = float(np.abs(a).max()) / 32767.0 or 1.0          # an all-zero tensor needs a non-zero scale
         scales.append(sc)
         q.append(np.round(a / sc).astype(np.int16).ravel())
     blob = np.concatenate(q).astype("<i2").tobytes()
@@ -73,12 +74,13 @@ def main():
     rng = np.random.default_rng(0)
     logits_cases, state_cases, seen = [], [], 0
     for step in range(6000):
-        if step % 97 == 0 and len(state_cases) < 12:
+        if step % 97 == 0 and len(state_cases) < args.cases:
             state_cases.append({"runner": runner_state(env), "eff": float(env.eff_speed), "dt": float(env.last_elapsed),
                                 "held": int(env.held), "obs": [round(float(x), 7) for x in obs]})
-        if step % 53 == 0 and len(logits_cases) < 12:
-            with torch.no_grad():
-                lg = pol.get_distribution(torch.as_tensor(obs[None])).distribution.logits[0].numpy()
+        if step % 53 == 0 and len(logits_cases) < args.cases:
+            with torch.no_grad():                   # RAW network outputs (what the browser computes), not normalised log-probs
+                x = torch.as_tensor(obs[None])
+                lg = pol.action_net(pol.mlp_extractor.forward_actor(pol.extract_features(x, pol.pi_features_extractor)))[0].numpy()
             logits_cases.append({"obs": [round(float(x), 7) for x in obs], "logits": [round(float(x), 6) for x in lg]})
         act, _ = model.predict(obs, deterministic=False)
         obs, rew, te, tu, info = env.step(int(act))
