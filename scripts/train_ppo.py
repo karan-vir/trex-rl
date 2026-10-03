@@ -78,7 +78,60 @@ class EvalCallback(BaseCallback):
         return True
 
 
+class ControlCallback(BaseCallback):
+    """Lets the Studio change settings of a RUNNING job: it drops runs/<name>/control.json, we apply it
+    at the start of the next rollout and log what changed to changes.csv (the charts mark those points)."""
+
+    LIVE = {"lr", "ent", "clip", "scen", "alive", "passb", "death"}
+
+    def __init__(self, out: Path, venv):
+        super().__init__()
+        self.out, self.venv, self.seen = out, venv, -1
+        with open(out / "changes.csv", "w", newline="") as f:
+            csv.writer(f).writerow(["frames", "what"])
+
+    def _apply(self, k, v):
+        m = self.model
+        if k == "lr":
+            m.learning_rate = v; m.lr_schedule = lambda _: v
+        elif k == "ent":
+            m.ent_coef = v
+        elif k == "clip":
+            m.clip_range = lambda _: v
+        elif k == "scen":
+            self.venv.set_attr("scenario_prob", v)
+        elif k in ("alive", "passb", "death"):
+            self.venv.set_attr({"alive": "alive_reward", "passb": "pass_bonus", "death": "death_penalty"}[k], v)
+
+    def _on_step(self) -> bool:
+        return True
+
+    def _on_rollout_start(self) -> None:
+        import json
+        ctl = self.out / "control.json"
+        if not ctl.exists():
+            return
+        try:
+            d = json.loads(ctl.read_text())
+        except ValueError:
+            return
+        if d.get("seq", 0) <= self.seen:
+            return
+        self.seen = d.get("seq", 0)
+        what = []
+        for k, v in d.get("set", {}).items():
+            if k in self.LIVE:
+                self._apply(k, float(v)); what.append(f"{k}={v:g}")
+        if d.get("save_now"):
+            self.model.save(self.out / "latest"); what.append("saved checkpoint")
+        if what:
+            with open(self.out / "changes.csv", "a", newline="") as f:
+                csv.writer(f).writerow([self.num_timesteps, ", ".join(what)])
+            print(f"[control] {self.num_timesteps/1e6:.2f}M: {', '.join(what)}", flush=True)
+
+
 def main():
+    import json
     p = argparse.ArgumentParser()
     p.add_argument("--frames", type=int, default=20_000_000)
     p.add_argument("--name", default="ppo_a")
@@ -123,7 +176,9 @@ def main():
             learning_rate=lambda f: args.lr * max(f, 0.1), clip_range=args.clip, ent_coef=args.ent_coef, vf_coef=args.vf_coef,
             policy_kwargs=dict(net_arch=dict(pi=[args.net_width] * args.net_layers, vf=[args.net_width] * args.net_layers), activation_fn=__import__("torch").nn.Tanh),
         )
-    cb = EvalCallback(out, args.eval_every, args.eval_episodes, args.max_frames)
+    (out / "params.json").write_text(json.dumps({**vars(args), "started": time.time()}))
+    (out / "control.json").unlink(missing_ok=True)
+    cb = [EvalCallback(out, args.eval_every, args.eval_episodes, args.max_frames), ControlCallback(out, venv)]
     t0 = time.time()
     model.learn(total_timesteps=args.frames, callback=cb, progress_bar=False)
     model.save(out / "final")

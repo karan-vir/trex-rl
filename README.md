@@ -139,3 +139,15 @@ submissions unless you pass `submit: 'top1'` .. `'top5'`.
 | 6 | Neuroevolution (hand-written NN + GA) | todo |
 | 7 | Compare agents on fixed seeds | todo |
 | 8 | Stretch: pixel observations / LLM agent | todo |
+
+
+## Training Studio (browser)
+
+```
+python scripts/studio.py        # opens http://127.0.0.1:8800
+```
+
+Three tabs: **Train** (start a run, change learning rate / rewards / practice scenarios while it runs, branch a new
+run from any point, live learning curve with markers where you changed something), **Evaluate** (fixed-seed games
+under chosen conditions, compared with the hand-written rule) and **Watch** (see the game, what the network sees and
+decides, and its hidden layers; or play yourself). The older keyboard-driven Pygame view is `python scripts/lab.py`.

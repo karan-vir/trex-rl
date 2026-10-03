@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>T-Rex Training Studio</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1c1c1a;--mute:#6b6b66;--line:#e4e3de;--c1:#2563eb;--c2:#0f9d58;--c3:#d97706;--c4:#9333ea;--bad:#dc2626;--soft:#f1f0eb}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--card:#1d1d1b;--ink:#ecebe6;--mute:#9a9992;--line:#34332f;--c1:#6ea0ff;--c2:#4cc38a;--c3:#f0a54a;--c4:#c08cf5;--bad:#f06a6a;--soft:#262624}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,system-ui,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:16px 16px 60px}
+h1{font-size:19px;margin:0}h2{font-size:15px;margin:0 0 8px}h3{font-size:13px;margin:14px 0 6px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.tabs{display:flex;gap:6px}.tab{padding:8px 16px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;font:inherit;font-weight:600}
+.tab.on{background:var(--c1);color:#fff;border-color:var(--c1)}
+.sub{color:var(--mute);font-size:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.cols{display:grid;grid-template-columns:400px 1fr;gap:14px;align-items:start}
+@media(max-width:980px){.cols{grid-template-columns:1fr}}
+button,select,input{font:inherit;color:var(--ink)}
+.btn{padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--c1)}.btn.pri{background:var(--c1);color:#fff;border-color:var(--c1)}.btn.bad{color:var(--bad)}.btn.sm{padding:4px 10px;font-size:12px}
+select,input[type=text],input[type=number]{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:5px 8px;max-width:100%}
+.knob{padding:7px 0;border-bottom:1px solid var(--line)}.knob:last-child{border:0}
+.knob .r{display:flex;justify-content:space-between;align-items:center;gap:8px}.knob label{font-weight:600}
+.knob .h{color:var(--mute);font-size:12px;margin-top:2px}
+.knob.dim{opacity:.4}
+.chip{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid var(--line)}
+.run{background:rgba(15,157,88,.14);color:var(--c2)}.done{color:var(--mute)}.stall{background:rgba(220,38,38,.12);color:var(--bad)}
+.runs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.rc{padding:6px 12px;border:1px solid var(--line);border-radius:9px;cursor:pointer;background:var(--card)}.rc.on{border-color:var(--c1);box-shadow:0 0 0 1px var(--c1)}
+.bar{height:8px;background:var(--line);border-radius:8px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--c1);transition:width .4s}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}.stat{flex:1 1 100px;background:var(--soft);border-radius:9px;padding:8px 10px}.stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.stat span{color:var(--mute);font-size:12px}
+canvas{width:100%;display:block}
+.legend span{margin-right:14px;font-size:12px;color:var(--mute)}.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}th:first-child,td:first-child{text-align:left}th{color:var(--mute);font-weight:500;font-size:12px}
+tr.sel td{background:var(--soft)}tr.clk{cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.live{background:var(--soft);border-radius:10px;padding:10px 12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px}
+#shot{width:100%;border-radius:10px;border:1px solid var(--line);image-rendering:pixelated;background:#f7f7f7}
+.pbar{display:flex;align-items:center;gap:8px;margin:5px 0}.pbar .n{width:90px;font-size:13px}.pbar .t{flex:1;height:14px;background:var(--line);border-radius:4px;overflow:hidden}.pbar .t i{display:block;height:100%}.pbar .v{width:52px;text-align:right;font-variant-numeric:tabular-nums;font-size:13px}
+.ob{display:grid;grid-template-columns:1fr 1fr;gap:1px 14px}.ob .o{display:flex;align-items:center;gap:6px;font-size:11.5px}.ob .o u{width:112px;text-decoration:none;color:var(--mute);overflow:hidden;white-space:nowrap}.ob .o .t{position:relative;flex:1;height:8px;background:var(--line);border-radius:3px}.ob .o .t i{position:absolute;top:0;height:100%;border-radius:3px}.ob .o b{width:40px;text-align:right;font-weight:500;font-variant-numeric:tabular-nums}
+.ev{font:12px ui-monospace,Menlo,monospace;line-height:1.5}.ev .x{color:var(--bad)}
+.err{color:var(--bad);font-size:13px}
+pre{font:11.5px ui-monospace,Menlo,monospace;background:var(--soft);padding:8px;border-radius:8px;overflow:auto;margin:6px 0 0}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.step{font-size:12px;color:var(--mute);background:var(--soft);padding:3px 10px;border-radius:99px}
+</style></head><body><div class="wrap">
+<div class="top">
+ <div><h1>T-Rex Training Studio</h1><div class="sub" id="upd">connecting…</div></div>
+ <div class="tabs"><button class="tab on" data-t="train">1 · Train</button><button class="tab" data-t="eval">2 · Evaluate</button><button class="tab" data-t="watch">3 · Watch</button></div>
+</div>
+
+<!-- TRAIN -->
+<section id="t-train">
+ <div class="steps"><span class="step">Start a run on the left</span><span class="step">Watch the curve on the right</span><span class="step">Change settings while it runs, or stop &amp; branch a new run</span><span class="step">Then Evaluate and Watch it play</span></div>
+ <div class="cols">
+  <div class="card" id="form"><h2>Start a new training run</h2><div id="formBody" class="sub">loading…</div></div>
+  <div>
+   <div class="runs" id="runList"></div>
+   <div class="card" id="runDetail"><div class="sub">No run selected yet. Start one, or pick an old run above.</div></div>
+  </div>
+ </div>
+</section>
+
+<!-- EVALUATE -->
+<section id="t-eval" hidden>
+ <div class="steps"><span class="step">Pick a model and conditions</span><span class="step">It plays many games with fixed seeds, so results compare fairly</span><span class="step">Compare runs in the table</span></div>
+ <div class="cols">
+  <div class="card"><h2>Run an evaluation</h2>
+   <div class="knob"><div class="r"><label>Model</label><select id="e_model"></select></div><div class="h">A saved network, or the old hand-written rule (v9) as the baseline to beat.</div></div>
+   <div class="knob"><div class="r"><label>Games</label><select id="e_eps"><option>20</option><option selected>50</option><option>100</option></select></div><div class="h">More games = more trustworthy numbers (and slower).</div></div>
+   <div class="knob"><div class="r"><label>Longest game</label><select id="e_cap"><option value="5000">~1.4 min of play</option><option value="20000" selected>~5.5 min of play</option><option value="60000">~17 min of play</option></select></div><div class="h">Games that reach this are counted as "survived".</div></div>
+   <div class="knob"><div class="r"><label>Screen refresh</label><select id="e_hz"><option>60</option><option selected>120</option><option>144</option></select></div><div class="h">Real browsers differ; a robust agent handles all.</div></div>
+   <div class="knob"><div class="r"><label>Timing jitter</label><select id="e_jit"><option value="0">none</option><option value="0.3" selected>0.3 ms</option><option value="0.6">0.6 ms</option></select></div></div>
+   <div class="knob"><div class="r"><label>Input delay</label><select id="e_lat"><option value="0" selected>none</option><option value="1">1 decision</option></select></div></div>
+   <div class="knob"><div class="r"><label>Start in danger</label><select id="e_sc"><option value="0" selected>no, normal start</option><option value="1">yes, close obstacles</option></select></div><div class="h">Stress test: every game starts with the rare hard cases.</div></div>
+   <div style="margin-top:10px"><button class="btn pri" id="e_go">Run evaluation</button> <span class="err" id="e_err"></span></div>
+  </div>
+  <div>
+   <div class="card"><h2>Results</h2><div id="evTable" class="sub">No evaluations yet.</div></div>
+   <div class="card" id="evDetail" hidden></div>
+  </div>
+ </div>
+</section>
+
+<!-- WATCH -->
+<section id="t-watch" hidden>
+ <div class="steps"><span class="step">Pick who plays</span><span class="step">Press New game</span><span class="step">See what it sees and decides, live</span></div>
+ <div class="card">
+  <div class="row">
+   <label>Who plays</label><select id="w_agent"></select>
+   <label>Refresh</label><select id="w_hz"><option>60</option><option selected>120</option><option>144</option></select>
+   <label>Jitter</label><select id="w_jit"><option value="0">none</option><option value="0.3" selected>0.3 ms</option><option value="0.6">0.6 ms</option></select>
+   <label>Delay</label><select id="w_lat"><option value="0" selected>none</option><option value="1">1</option></select>
+   <label><input type="checkbox" id="w_sc"> danger start</label>
+   <label><input type="checkbox" id="w_box"> show hit boxes</label>
+  </div>
+  <div class="row" style="margin-top:8px">
+   <button class="btn pri" id="w_new">New game</button><button class="btn" id="w_same">Replay same course</button><button class="btn" id="w_pause">Pause</button>
+   <label>Speed</label><select id="w_speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select>
+   <label><input type="checkbox" id="w_auto" checked> auto-restart</label>
+   <span class="sub" id="w_info"></span><span class="err" id="w_err"></span>
+  </div>
+ </div>
+ <img id="shot" alt="game">
+ <div class="cols" style="grid-template-columns:1fr 1fr 1fr;margin-top:12px">
+  <div class="card"><h2>What it sees <span class="sub">(22 numbers)</span></h2><div class="ob" id="w_obs"></div></div>
+  <div class="card"><h2>What it decides</h2><div id="w_probs"></div><div class="sub" id="w_flags"></div><h3>What just happened</h3><div class="ev" id="w_ev"></div></div>
+  <div class="card"><h2>Inside the network</h2><div class="sub">activity of the hidden layers: red = high, blue = low</div><canvas id="w_h1" height="90"></canvas><canvas id="w_h2" height="90" style="margin-top:8px"></canvas></div>
+ </div>
+ <div class="sub">Playing yourself: pick “You” as player, then ↑ / space = jump, ↓ = duck.</div>
+</section>
+</div>
+<script>
+const $=id=>document.getElementById(id), fmt=n=>Math.round(n).toLocaleString();
+const api=async(p,body)=>{const r=await fetch(p,body?{method:'POST',body:JSON.stringify(body)}:{cache:'no-store'});return r.json()};
+let K=null,S=null,sel=null,builtFor=null,tab='train';
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ---------- tabs
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>showTab(b.dataset.t));
+function showTab(t){tab=t;document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+ for(const x of['train','eval','watch'])$('t-'+x).hidden=x!==t; if(t==='watch')watchEnter(); if(S)render()}
+
+// ---------- training form
+const GROUPS=[['How long, how fast',['frames','envs','eval','cap','seed']],['How it learns',['lr','ent','clip','epochs','n_steps','batch','gamma','lam']],['What it practises',['scen']],['What it is rewarded for',['alive','passb','death']],['Network shape (new networks only)',['width','layers']]];
+function buildForm(){
+ const kb={};K.knobs.forEach(k=>kb[k.key]=k);
+ let h=`<div class="knob"><div class="r"><label>Start from</label><select id="f_start"></select></div><div class="h">Continue improving a saved network, or begin with a fresh random one.</div></div>
+ <div class="knob"><div class="r"><label>Presets</label><span>${Object.keys(K.presets).map(p=>`<button class="btn sm" data-p="${p}">${p}</button>`).join(' ')}</span></div><div class="h">Just fills in the values below. You can still change anything.</div></div>
+ <div class="knob"><div class="r"><label>Run name</label><input type="text" id="f_name" placeholder="auto" size="14"></div></div>`;
+ for(const[g,keys]of GROUPS){h+=`<h3>${g}</h3>`;for(const key of keys){const k=kb[key];
+  h+=`<div class="knob" data-k="${key}"><div class="r"><label>${k.label}</label><select data-key="${key}">${k.options.map(o=>`<option value="${o.v}" ${o.v==k.default?'selected':''}>${o.text}</option>`).join('')}</select></div><div class="h">${k.help}${k.live?' <b>Can be changed while running.</b>':''}</div></div>`}}
+ h+=`<div style="margin-top:12px"><button class="btn pri" id="f_go">▶ Start training</button> <span class="err" id="f_err"></span></div>`;
+ $('formBody').innerHTML=h;$('formBody').className='';
+ document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>applyPreset(b.dataset.p));
+ $('f_start').onchange=dimNew;$('f_go').onclick=startRun;fillStart();
+}
+function fillStart(){const s=$('f_start');if(!s)return;const keep=s.value;
+ s.innerHTML=`<option value="">a fresh network</option>`+S.ckpts.map(c=>`<option value="${c.path}">${c.label}</option>`).join('');
+ if(keep&&[...s.options].some(o=>o.value===keep))s.value=keep;else{const b=S.ckpts.find(c=>c.label==='ppo_d/best')||S.ckpts[S.ckpts.length-1];if(b&&!s.dataset.init){s.value=b.path}}
+ s.dataset.init=1;dimNew()}
+function dimNew(){const fresh=!$('f_start').value;document.querySelectorAll('.knob[data-k]').forEach(d=>{const k=K.knobs.find(x=>x.key===d.dataset.k);d.classList.toggle('dim',k.new_only&&!fresh)})}
+function setKnob(key,v){const s=document.querySelector(`#formBody select[data-key="${key}"]`);if(!s)return;let best=0,bd=1e99;[...s.options].forEach((o,i)=>{const d=Math.abs(parseFloat(o.value)-v);if(d<bd){bd=d;best=i}});s.selectedIndex=best}
+function applyPreset(p){const v=K.presets[p];for(const k in v)setKnob(k,v[k]);if(p.includes('fresh'))$('f_start').value='';dimNew()}
+async function startRun(){const values={};document.querySelectorAll('#formBody select[data-key]').forEach(s=>values[s.dataset.key]=parseFloat(s.value));
+ const r=await api('/api/train',{name:$('f_name').value,resume:$('f_start').value||null,values});
+ if(r.error){$('f_err').textContent=r.error;return}$('f_err').textContent='';sel=r.name;builtFor=null;$('f_name').value='';setTimeout(refresh,1500)}
+
+// ---------- run list + detail
+function renderRuns(){
+ const rl=$('runList');rl.innerHTML=S.runs.map(r=>`<div class="rc ${r.name===sel?'on':''}" data-r="${r.name}"><b>${r.name}</b> <span class="chip ${r.running?(r.age>600?'stall':'run'):'done'}">${r.running?'training':'finished'}</span></div>`).join('')||'<span class="sub">no runs yet</span>';
+ rl.querySelectorAll('.rc').forEach(d=>d.onclick=()=>{sel=d.dataset.r;builtFor=null;render()});
+ if(!sel&&S.runs.length)sel=(S.runs.find(r=>r.running)||S.runs[0]).name;
+ const r=S.runs.find(x=>x.name===sel);if(!r){return}
+ const rows=r.rows,last=rows[rows.length-1],total=r.params&&r.params.frames;
+ if(builtFor!==r.name){builtFor=r.name;buildDetail(r)}
+ $('d_chip').className='chip '+(r.running?(r.age>900?'stall':'run'):'done');$('d_chip').textContent=r.running?(r.age>900?'stalled?':'training'):'finished';
+ $('d_prog').textContent=last?`${(last.frames/1e6).toFixed(1)}M${total?' of '+(total/1e6)+'M':''} decisions · ${last.minutes.toFixed(1)} min`:(r.running?'warming up… first point appears after the first evaluation':'no evaluations');
+ $('d_bar').style.width=(last&&total?Math.min(100,last.frames/total*100):0)+'%';
+ const eta=last&&total&&r.running&&last.minutes>0?Math.max(0,Math.round((total-last.frames)/(last.frames/last.minutes))):null;$('d_eta').textContent=eta!=null?`about ${eta} min left`:'';
+ const best=rows.length?Math.max(...rows.map(x=>x.mean)):0;
+ $('d_stats').innerHTML=last?[['median',last.median],['mean',last.mean],['worst 10%',last.p10],['best mean so far',best]].map(([l,v])=>`<div class="stat"><b>${fmt(v)}</b><span>${l}</span></div>`).join(''):'';
+ drawChart($('d_chart'),rows,r.changes);
+ $('d_changes').innerHTML=r.changes.length?'<h3>Changes made while it ran</h3>'+r.changes.map(c=>`<div class="sub">at ${(c.frames/1e6).toFixed(2)}M: ${c.what}</div>`).join(''):'';
+ $('d_log').textContent=r.tail.join('\n')||'(no log)';
+}
+function knobSelect(k,cur,key){return `<select data-live="${k.key}">${k.options.map(o=>`<option value="${o.v}" ${Math.abs(o.v-cur)<1e-12?'selected':''}>${o.text}</option>`).join('')}</select>`}
+function buildDetail(r){
+ const p=r.params,liveKs=K.knobs.filter(k=>k.live);
+ const map={lr:'lr',ent:'ent_coef',clip:'clip',scen:'scenario_prob',alive:'alive_reward',passb:'pass_bonus',death:'death_penalty'};
+ let live='';
+ if(p){
+  live=`<h3>Change settings</h3><div class="live"><div class="sub" style="margin-bottom:6px">${r.running?'Pick new values and press Apply: the running job picks them up within seconds and the chart marks the moment.':'This run has finished. Copy its settings into a new run on the left to continue it.'}</div><div class="grid2">${liveKs.map(k=>`<div class="r" style="display:flex;justify-content:space-between;gap:6px"><label>${k.label}</label>${knobSelect(k,p[map[k.key]],k.key)}</div>`).join('')}</div>
+  <div class="row" style="margin-top:8px">${r.running?`<button class="btn pri sm" id="d_apply">Apply to running job</button><button class="btn sm" id="d_save">Save a checkpoint now</button>`:''}<span class="err" id="d_msg"></span></div></div>`}
+ $('runDetail').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">${r.name} <span class="chip" id="d_chip"></span></h2>
+  <div class="row">${r.running?`<button class="btn sm bad" id="d_stop">■ Stop</button>`:''}<button class="btn sm" id="d_eval">Evaluate best</button><button class="btn sm" id="d_watch">Watch best play</button><button class="btn sm" id="d_branch">Branch: new run from here</button></div></div>
+  <div style="display:flex;justify-content:space-between;margin-top:10px"><span id="d_prog"></span><span class="sub" id="d_eta"></span></div><div class="bar"><i id="d_bar"></i></div>
+  <div class="stats" id="d_stats"></div>
+  <div class="legend"><span><i style="background:var(--c1)"></i>median</span><span><i style="background:var(--c2)"></i>mean</span><span><i style="background:var(--c3)"></i>worst 10%</span><span><i style="background:var(--c4)"></i>best 10%</span><span>┆ dashed line = you changed a setting</span></div>
+  <canvas id="d_chart" style="height:260px"></canvas>
+  <div class="sub">Each point = a fixed set of 24 test games. A score near 6,195 means the game hit the length cap (survived). Watch the <b>worst 10%</b>: consistency matters more than the best game.</div>
+  <div id="d_changes"></div>${live}
+  <details style="margin-top:10px"><summary class="sub">training log</summary><pre id="d_log"></pre></details>`;
+ const best=S.ckpts.find(c=>c.run===r.name&&c.name==='best')||S.ckpts.filter(c=>c.run===r.name).pop();
+ $('d_eval').onclick=()=>{if(best){$('e_model').value=best.path;showTab('eval')}};
+ $('d_watch').onclick=()=>{if(best){$('w_agent').value='ppo|'+best.path;showTab('watch');watchNew()}};
+ $('d_branch').onclick=()=>{if(p){for(const k in map){setKnob(k,p[map[k]])}[['frames','frames'],['envs','n_envs'],['eval','eval_every'],['cap','max_frames'],['epochs','epochs'],['n_steps','n_steps'],['batch','batch_size'],['gamma','gamma'],['lam','gae_lambda'],['seed','seed']].forEach(([a,b])=>setKnob(a,p[b]))}
+   if(best)$('f_start').value=best.path;dimNew();window.scrollTo({top:0,behavior:'smooth'})};
+ if($('d_stop'))$('d_stop').onclick=async()=>{await api('/api/stop',{name:r.name});setTimeout(refresh,1500)};
+ if($('d_apply'))$('d_apply').onclick=async()=>{const set={};document.querySelectorAll('[data-live]').forEach(s=>set[s.dataset.live]=parseFloat(s.value));await api('/api/control',{name:r.name,set});$('d_msg').textContent='sent: applies at the next update';setTimeout(()=>$('d_msg')&&($('d_msg').textContent=''),4000)};
+ if($('d_save'))$('d_save').onclick=async()=>{await api('/api/control',{name:r.name,set:{},save_now:true});$('d_msg').textContent='checkpoint will be saved at the next update'};
+}
+function drawChart(cv,rows,changes){
+ const dpr=devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
+ if(!rows.length){g.fillStyle=css('--mute');g.font='13px system-ui';g.fillText('waiting for the first evaluation…',14,28);return}
+ const L=50,R=10,T=10,B=24,xmax=Math.max(...rows.map(r=>r.frames),...changes.map(c=>c.frames))*1.02||1,ymax=Math.max(6500,...rows.map(r=>r.p90))*1.05;
+ const X=v=>L+v/xmax*(W-L-R),Y=v=>T+(1-v/ymax)*(H-T-B);g.strokeStyle=css('--line');g.fillStyle=css('--mute');g.font='11px system-ui';g.lineWidth=1;
+ for(let i=0;i<=4;i++){const v=ymax*i/4;g.beginPath();g.moveTo(L,Y(v));g.lineTo(W-R,Y(v));g.stroke();g.textAlign='right';g.fillText(fmt(v),L-6,Y(v)+4)}
+ g.textAlign='center';for(let i=0;i<=5;i++){const v=xmax*i/5;g.fillText((v/1e6).toFixed(1)+'M',X(v),H-7)}
+ g.setLineDash([4,4]);g.strokeStyle=css('--mute');for(const c of changes){g.beginPath();g.moveTo(X(c.frames),T);g.lineTo(X(c.frames),H-B);g.stroke()}g.setLineDash([]);
+ for(const[k,c,w]of[['p90','--c4',1],['p10','--c3',2],['mean','--c2',2],['median','--c1',2.5]]){g.strokeStyle=css(c);g.lineWidth=w;g.beginPath();rows.forEach((r,i)=>i?g.lineTo(X(r.frames),Y(r[k])):g.moveTo(X(r.frames),Y(r[k])));g.stroke();
+  g.fillStyle=css(c);rows.forEach(r=>{g.beginPath();g.arc(X(r.frames),Y(r[k]),2.5,0,7);g.fill()})}
+}
+
+// ---------- evaluate
+$('e_go').onclick=async()=>{const r=await api('/api/eval',{model:$('e_model').value,episodes:+$('e_eps').value,cap:+$('e_cap').value,hz:+$('e_hz').value,jitter:+$('e_jit').value,latency:+$('e_lat').value,scenario:+$('e_sc').value});
+ $('e_err').textContent=r.error||'';if(!r.error){evSel=r.id;setTimeout(refresh,800)}};
+let evSel=null;
+function pct(a,q){const s=[...a].sort((x,y)=>x-y);return s[Math.min(s.length-1,Math.floor(q*s.length))]}
+function renderEvals(){
+ const m=$('e_model');if(!m.dataset.n||+m.dataset.n!==S.ckpts.length){const keep=m.value;m.innerHTML=`<option value="rule">hand-written rule (v9)</option>`+S.ckpts.map(c=>`<option value="${c.path}">${c.label}</option>`).join('');m.dataset.n=S.ckpts.length;m.value=keep||(S.ckpts.find(c=>c.label==='ppo_d/best')||{}).path||'rule'}
+ const ev=S.evals;if(!ev.length){return}
+ const name=e=>e.model==='rule'?'hand-written rule (v9)':e.model.replace(/^runs\//,'').replace(/\.zip$/,'');
+ const cond=e=>`${e.hz}Hz, jitter ${e.jitter}, delay ${e.latency}${e.scenario?', danger start':''}, ${e.episodes} games`;
+ $('evTable').innerHTML='<table><tr><th>model / conditions</th><th>median</th><th>mean</th><th>worst 10%</th><th>worst game</th><th>reached cap</th></tr>'+ev.map(e=>{
+  if(!e.done)return `<tr class="clk" data-e="${e.id}"><td>${name(e)}<div class="sub">${cond(e)}</div></td><td colspan="5"><div class="bar"><i style="width:${(e.progress*100)|0}%"></i></div><span class="sub">running ${(e.progress*100)|0}%</span></td></tr>`;
+  const s=e.scores,cap=e.killers.filter(k=>k==='survived to cap').length;
+  return `<tr class="clk ${e.id===evSel?'sel':''}" data-e="${e.id}"><td>${name(e)}<div class="sub">${cond(e)}</div></td><td>${fmt(pct(s,.5))}</td><td>${fmt(s.reduce((a,b)=>a+b,0)/s.length)}</td><td>${fmt(pct(s,.1))}</td><td>${fmt(Math.min(...s))}</td><td>${cap}/${s.length}</td></tr>`}).join('')+'</table>';
+ document.querySelectorAll('#evTable tr[data-e]').forEach(t=>t.onclick=()=>{evSel=t.dataset.e;renderEvals()});
+ const e=ev.find(x=>x.id===evSel&&x.done);$('evDetail').hidden=!e;
+ if(e){const s=e.scores,max=Math.max(...s,1),nb=12,bins=Array(nb).fill(0);s.forEach(v=>bins[Math.min(nb-1,Math.floor(v/(max+1)*nb))]++);
+  const deaths={};e.killers.forEach(k=>deaths[k]=(deaths[k]||0)+1);
+  $('evDetail').innerHTML=`<h2>${name(e)} <span class="sub">${cond(e)}</span></h2><div class="sub">How the games ended up: each bar is a score range, height = number of games.</div><canvas id="hist" style="height:170px"></canvas>
+  <h3>What ended the games</h3>${Object.entries(deaths).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="pbar"><span class="n" style="width:140px">${k}</span><span class="t"><i style="width:${v/s.length*100}%;background:${k==='survived to cap'?'var(--c2)':'var(--bad)'}"></i></span><span class="v">${v}</span></div>`).join('')}
+  <div class="row" style="margin-top:8px"><button class="btn sm" id="ev_watch">Watch this model play</button></div>`;
+  histDraw($('hist'),bins,max);
+  $('ev_watch').onclick=()=>{$('w_agent').value=e.model==='rule'?'rule':'ppo|'+e.model;showTab('watch');watchNew()}}
+}
+function histDraw(cv,bins,max){const dpr=devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);
+ const mx=Math.max(...bins,1),bw=(W-40)/bins.length;g.font='11px system-ui';g.textAlign='center';
+ bins.forEach((v,i)=>{const h=v/mx*(H-34);g.fillStyle=css('--c1');g.fillRect(30+i*bw+2,H-22-h,bw-4,h);g.fillStyle=css('--mute');if(v)g.fillText(v,30+i*bw+bw/2,H-26-h);
+  if(i%2==0)g.fillText(fmt(i*(max+1)/bins.length),30+i*bw+bw/2,H-6)})}
+
+// ---------- watch
+let wRun=false,wPaused=false,wDone=0,wAct=0,wBusy=false,wLast=null,wCfg=null;
+function watchEnter(){const a=$('w_agent');if(!S)return;const n=S.ckpts.length;if(a.dataset.n!=n){const keep=a.value;
+  a.innerHTML=`<option value="rule">hand-written rule (v9)</option><option value="human">You (keyboard)</option><option value="random">random keys</option>`+S.ckpts.map(c=>`<option value="ppo|${c.path}">trained: ${c.label}</option>`).join('');a.dataset.n=n;
+  a.value=keep||'ppo|'+((S.ckpts.find(c=>c.label==='ppo_d/best')||S.ckpts[0]||{}).path)}
+ if(!wRun&&!wLast)watchNew()}
+async function watchNew(seed){const v=$('w_agent').value,ppo=v.startsWith('ppo|');
+ wCfg={agent:ppo?'ppo':v,model:ppo?v.slice(4):null,hz:+$('w_hz').value,jitter:+$('w_jit').value,latency:+$('w_lat').value,scenario:$('w_sc').checked,seed:seed!=null?seed:(wCfg?wCfg.seed+1:1),boxes:$('w_box').checked};
+ const r=await api('/api/watch/new',wCfg);if(r.error){$('w_err').textContent=r.error;return}$('w_err').textContent='';wDone=0;showFrame(r);if(!wRun){wRun=true;loop()}}
+$('w_new').onclick=()=>watchNew();$('w_same').onclick=()=>watchNew(wCfg?wCfg.seed:1);
+$('w_pause').onclick=()=>{wPaused=!wPaused;$('w_pause').textContent=wPaused?'Resume':'Pause'};
+['w_agent','w_hz','w_jit','w_lat','w_sc'].forEach(i=>$(i).onchange=()=>watchNew(wCfg?wCfg.seed:1));
+addEventListener('keydown',e=>{if(tab!=='watch')return;if(e.key==='ArrowUp'||e.key===' '){wAct=1;e.preventDefault()}else if(e.key==='ArrowDown'){wAct=2;e.preventDefault()}});
+addEventListener('keyup',e=>{if(e.key==='ArrowUp'||e.key===' '||e.key==='ArrowDown')wAct=0});
+async function loop(){
+ while(true){
+  if(tab==='watch'&&!wPaused&&!wBusy&&wCfg){wBusy=true;try{
+   const sp=+$('w_speed').value,r=await api(`/api/watch/step?n=${Math.max(1,Math.round(2*sp))}&act=${wCfg.agent==='human'?wAct:0}&boxes=${$('w_box').checked?1:0}`);
+   if(r.error)$('w_err').textContent=r.error;else{showFrame(r);
+    if(r.done){wDone=wDone||Date.now();if($('w_auto').checked&&Date.now()-wDone>1500){wDone=0;await watchNew()}}}
+  }catch(e){}wBusy=false}
+  await new Promise(r=>setTimeout(r,33));
+ }}
+const OC=['--c1','--c1','--c1','--c1','--c1','--c1','--c1','--c1','--c1','--c2','--c2','--c2','--c2','--c2','--c3','--c3','--c3','--c3','--c3','--c4','--c4','--c4'];
+function showFrame(r){wLast=r;$('shot').src='data:image/png;base64,'+r.png;
+ $('w_info').textContent=`score ${r.score} · speed ${r.speed} · ${r.decisions} decisions (${(r.decisions/60).toFixed(1)} s)`+(r.done?' · '+r.crash:'');
+ const names=['no key','JUMP held','DUCK held'];
+ $('w_probs').innerHTML=r.probs?r.probs.map((p,i)=>`<div class="pbar"><span class="n">${names[i]}</span><span class="t"><i style="width:${p*100}%;background:${i===r.held?'var(--c2)':'var(--c1)'}"></i></span><span class="v">${(p*100).toFixed(0)}%</span></div>`).join(''):`<div class="sub">${r.kind==='rule'?'The hand-written rule says: <b>'+r.rule_action+'</b> (fixed if/then rules, no probabilities)':r.kind==='human'?'You are playing.':r.kind==='random'?'Random keys.':'thinking…'}</div>`;
+ $('w_flags').innerHTML=`keys held: <b>${names[r.held]}</b> · `+['jumping','ducking','fast_fall'].map(k=>r.flags[k]?`<b>${k.replace('_',' ')}</b>`:`<s>${k.replace('_',' ')}</s>`).join(' · ')+` · state ${r.flags.status}`;
+ $('w_ev').innerHTML=r.events.map(e=>`<div class="${/^(!!|CRASH)/.test(e)?'x':''}">${e}</div>`).join('');
+ $('w_obs').innerHTML=r.obs.map((v,i)=>{const c=Math.max(-1.5,Math.min(1.5,v))/1.5,l=50+Math.min(0,c)*50,w=Math.abs(c)*50;return `<div class="o"><u>${r.obs_names[i].replace('obstacle ','obs ').replace('is pterodactyl','is ptero').replace('flying height','fly height').replace('duck-anim while jumping','duck anim in air')}</u><span class="t"><i style="left:${l}%;width:${Math.max(w,1)}%;background:var(${OC[i]})"></i></span><b>${v.toFixed(2)}</b></div>`}).join('');
+ heat($('w_h1'),r.h1);heat($('w_h2'),r.h2)}
+function heat(cv,h){const dpr=devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
+ if(!h){g.fillStyle=css('--mute');g.font='12px system-ui';g.fillText('(no hidden layer)',4,16);return}
+ const cols=Math.min(32,h.length),rows=Math.ceil(h.length/cols),cw=W/cols,ch=Math.min(cw,H/rows);
+ h.forEach((v,i)=>{const t=Math.max(-1,Math.min(1,v));g.fillStyle=`rgb(${60+180*Math.max(t,0)|0},${60+40*(1-Math.abs(t))|0},${60+180*Math.max(-t,0)|0})`;g.fillRect((i%cols)*cw,((i/cols)|0)*ch,cw-1,ch-1)})}
+
+// ---------- main refresh
+function render(){renderRuns();renderEvals();fillStartOnce()}
+function fillStartOnce(){const s=$('f_start');if(s&&+s.dataset.n!==S.ckpts.length){s.dataset.n=S.ckpts.length;fillStart()}}
+async function refresh(){try{S=await api('/api/state');$('upd').textContent='updated '+S.now+' · refreshes every 3 s';if(!K){K=await api('/api/knobs');buildForm()}render()}catch(e){$('upd').textContent='cannot reach the studio server'}}
+refresh();setInterval(()=>{if(!document.hidden)refresh()},3000);addEventListener('resize',()=>S&&render());
+</script></body></html>
