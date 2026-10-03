@@ -203,12 +203,13 @@ def draw_brain(surf, rect, sess: Session, f):
     panel(surf, rect, "INSIDE THE NETWORK  (2 hidden layers)", f)
     for k, (h, name) in enumerate(((sess.h1, "layer 1"), (sess.h2, "layer 2"))):
         x0 = rect.x + 12 + k * (rect.w // 2)
-        text(surf, f["s"], name + " (128 units)", (x0, rect.y + 28), MUTE)
+        text(surf, f["s"], name + (f" ({len(h)} units)" if h is not None else ""), (x0, rect.y + 28), MUTE)
         if h is None:
             text(surf, f["s"], "n/a for this agent", (x0, rect.y + 48), LINE)
             continue
-        cell = max(4, (rect.w // 2 - 30) // 16)
-        for i, v in enumerate(h[:128]):
+        rows_n = (len(h) + 15) // 16
+        cell = max(3, min((rect.w // 2 - 30) // 16, (rect.h - 80) // rows_n))
+        for i, v in enumerate(h):
             cx, cy = x0 + (i % 16) * cell, rect.y + 46 + (i // 16) * cell
             t = float(np.clip(v, -1, 1))
             col = (int(60 + 180 * max(t, 0)), int(60 + 40 * (1 - abs(t))), int(60 + 180 * max(-t, 0)))

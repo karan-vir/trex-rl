@@ -129,11 +129,13 @@ class Session:
         with torch.no_grad():
             x = torch.as_tensor(obs[None])
             feats = pol.extract_features(x, pol.pi_features_extractor)
-            net = pol.mlp_extractor.policy_net
-            h1 = net[1](net[0](feats))
-            h2 = net[3](net[2](h1))
-            probs = torch.softmax(pol.action_net(h2), dim=-1)[0].numpy()
-        return int(np.argmax(probs)), probs, h1[0].numpy(), h2[0].numpy()
+            h, acts = feats, []
+            for layer in pol.mlp_extractor.policy_net:        # Linear, Tanh, Linear, Tanh, ...
+                h = layer(h)
+                if not isinstance(layer, torch.nn.Linear):
+                    acts.append(h[0].numpy())
+            probs = torch.softmax(pol.action_net(h), dim=-1)[0].numpy()
+        return int(np.argmax(probs)), probs, acts[0], acts[-1] if len(acts) > 1 else None
 
     def _events(self) -> None:
         e = self.engine

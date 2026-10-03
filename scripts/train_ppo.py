@@ -21,9 +21,9 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from trex.real_env import RealTRexEnv
 
 
-def make_env(max_frames, seed, scenario_prob=0.0):
+def make_env(max_frames, seed, scenario_prob=0.0, rewards=None):
     def _f():
-        env = RealTRexEnv(max_frames=max_frames, randomize=True, scenario_prob=scenario_prob)
+        env = RealTRexEnv(max_frames=max_frames, randomize=True, scenario_prob=scenario_prob, **(rewards or {}))
         env.reset(seed=seed)
         return env
     return _f
@@ -91,24 +91,37 @@ def main():
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--ent-coef", type=float, default=0.01)
     p.add_argument("--clip", type=float, default=0.2)
+    p.add_argument("--gamma", type=float, default=0.995, help="how far ahead the agent cares (closer to 1 = longer horizon)")
+    p.add_argument("--gae-lambda", type=float, default=0.95)
+    p.add_argument("--epochs", type=int, default=6, help="passes over each batch of experience")
+    p.add_argument("--n-steps", type=int, default=512, help="steps per env between updates")
+    p.add_argument("--batch-size", type=int, default=1024)
+    p.add_argument("--vf-coef", type=float, default=0.5)
+    p.add_argument("--net-width", type=int, default=128, help="units per hidden layer (new networks only)")
+    p.add_argument("--net-layers", type=int, default=2, help="hidden layers (new networks only)")
+    p.add_argument("--alive-reward", type=float, default=0.01, help="reward per decision survived")
+    p.add_argument("--death-penalty", type=float, default=1.0)
+    p.add_argument("--pass-bonus", type=float, default=0.3, help="reward for clearing an obstacle")
     p.add_argument("--save-every", type=int, default=1_000_000, help="keep a checkpoint every N decisions")
     p.add_argument("--resume", default=None, help="path of a saved model to continue from")
     args = p.parse_args()
 
     out = Path("runs") / args.name
     out.mkdir(parents=True, exist_ok=True)
-    venv = SubprocVecEnv([make_env(args.max_frames, args.seed * 1000 + i, args.scenario_prob) for i in range(args.n_envs)])
+    rewards = dict(alive_reward=args.alive_reward, death_penalty=args.death_penalty, pass_bonus=args.pass_bonus)
+    venv = SubprocVecEnv([make_env(args.max_frames, args.seed * 1000 + i, args.scenario_prob, rewards) for i in range(args.n_envs)])
     if args.resume:
         # a polishing phase: smaller steps than the original run, so the policy stops swinging between checkpoints
         model = PPO.load(args.resume, env=venv, device="cpu", custom_objects={
             "learning_rate": args.lr, "lr_schedule": (lambda _: args.lr), "ent_coef": args.ent_coef,
-            "clip_range": (lambda _: args.clip)})
+            "clip_range": (lambda _: args.clip), "gamma": args.gamma, "gae_lambda": args.gae_lambda,
+            "n_epochs": args.epochs, "n_steps": args.n_steps, "batch_size": args.batch_size, "vf_coef": args.vf_coef})
     else:
         model = PPO(
             "MlpPolicy", venv, device="cpu", seed=args.seed, verbose=0,
-            n_steps=512, batch_size=1024, n_epochs=6, gamma=0.995, gae_lambda=0.95,
-            learning_rate=lambda f: args.lr * max(f, 0.1), clip_range=args.clip, ent_coef=args.ent_coef, vf_coef=0.5,
-            policy_kwargs=dict(net_arch=dict(pi=[128, 128], vf=[128, 128]), activation_fn=__import__("torch").nn.Tanh),
+            n_steps=args.n_steps, batch_size=args.batch_size, n_epochs=args.epochs, gamma=args.gamma, gae_lambda=args.gae_lambda,
+            learning_rate=lambda f: args.lr * max(f, 0.1), clip_range=args.clip, ent_coef=args.ent_coef, vf_coef=args.vf_coef,
+            policy_kwargs=dict(net_arch=dict(pi=[args.net_width] * args.net_layers, vf=[args.net_width] * args.net_layers), activation_fn=__import__("torch").nn.Tanh),
         )
     cb = EvalCallback(out, args.eval_every, args.eval_episodes, args.max_frames)
     t0 = time.time()

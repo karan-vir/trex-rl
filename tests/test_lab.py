@@ -41,3 +41,27 @@ def test_lab_controls_and_render():
             lab.render()
     assert lab.cfg.latency == 1 and lab.cfg.scenario is True
     assert lab.key(pygame.K_ESCAPE) is False
+
+
+def test_training_setup_builds_command():
+    from trex.lab.trainer import Setup
+    ck = [{"run": "r", "name": "best", "path": "runs/r/best.zip", "M": None}]
+    st = Setup(ck, 0)
+    st.row = 2 + 1          # learning rate
+    st.change(+1)
+    cmd = st.command()
+    assert "--resume" in cmd and cmd[cmd.index("--lr") + 1] == "0.0001"
+    assert "--net-width" not in cmd                      # ignored when continuing
+    st.start = -1
+    assert "--net-width" in st.command() and "--resume" not in st.command()
+
+
+def test_lab_setup_menu_opens():
+    lab = Lab(seed=2)
+    lab.key(pygame.K_t)
+    assert lab.setup is not None
+    for k in (pygame.K_DOWN, pygame.K_RIGHT, pygame.K_DOWN, pygame.K_LEFT):
+        lab.key(k)
+    lab.render()
+    lab.key(pygame.K_ESCAPE)
+    assert lab.setup is None
