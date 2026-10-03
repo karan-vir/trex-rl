@@ -46,6 +46,9 @@ class RealTRexEnv(gym.Env):
         skip_clear_time: bool | None = None,
         alive_reward: float = 0.01,
         death_penalty: float = 1.0,
+        pass_bonus: float = 0.3,
+        decision_ms: float = 1000.0 / 60.0,     # how often the agent decides (keys stay held in between)
+        scenario_prob: float = 0.0,             # share of episodes that start with a close, random obstacle pair
     ):
         super().__init__()
         self.max_frames = max_frames
@@ -54,6 +57,9 @@ class RealTRexEnv(gym.Env):
                           start_speed=start_speed, skip_clear_time=skip_clear_time)
         self.alive_reward = alive_reward
         self.death_penalty = death_penalty
+        self.pass_bonus = pass_bonus
+        self.decision_ms = decision_ms
+        self.scenario_prob = scenario_prob if randomize else 0.0
         self.action_space = spaces.Discrete(3)
         self.observation_space = spaces.Box(-5.0, 5.0, shape=(OBS_DIM,), dtype=np.float32)
         self.engine: RealEngine | None = None
@@ -87,15 +93,41 @@ class RealTRexEnv(gym.Env):
         self.engine = RealEngine(seed=int(self.np_random.integers(2**31)), frame_ms=frame_ms,
                                  jitter_ms=jitter, start_speed=start_speed, skip_clear_time=skip)
         self.latency = latency
+        self.skip = max(1, round(self.decision_ms / frame_ms))     # display frames per decision
+        self.passed: set[int] = set()
         self.pending: list[int] = [0] * latency
         self.held = 0                      # key state actually applied to the game
         self.prev_x = None
         self.eff_speed = start_speed       # smoothed observed obstacle speed (px per 1/60 s)
+        if self.scenario_prob > 0 and self.np_random.random() < self.scenario_prob:
+            self._scenario(skip)
         self.engine.frame()                # first frame so dt and positions exist
         self.t = 0
+        self.last_elapsed = float(getattr(self.engine, "last_dt", 8))
         return self._observe(), {}
 
     # ------------------------------------------------------------------
+    def _scenario(self, skip_clear: bool) -> None:
+        """Start with rare, dangerous situations on the screen instead of waiting for them to occur.
+
+        Half the time an obstacle is already overhead or beside the dino (a high pterodactyl passing
+        above a standing dino is the classic one); then a second obstacle of any kind follows at a
+        random distance. Kinds and heights are uniform, not the game's natural mix.
+        """
+        rng, e = self.np_random, self.engine
+        e.running_time = float(3001)                       # obstacles are active immediately
+        e.speed = max(e.speed, float(rng.uniform(8.5, 13.0)))
+        e.obstacles.clear()
+        if rng.random() < 0.5:
+            e.inject(2, NOSE_X + float(rng.uniform(-60, 40)), y_index=0)                  # high pterodactyl overhead
+            nxt = NOSE_X + float(rng.uniform(150, 500))
+        else:
+            nxt = NOSE_X + float(rng.uniform(40, 350))
+            e.inject(int(rng.integers(0, 3)), nxt, y_index=int(rng.integers(0, 3)), size=int(rng.integers(1, 4)))
+            nxt += float(rng.uniform(120, 400))
+        last = e.inject(int(rng.integers(0, 3)), nxt, y_index=int(rng.integers(0, 3)), size=int(rng.integers(1, 4)))
+        last.gap = int(rng.integers(150, 500))
+
     def _apply_keys(self, new: int) -> None:
         e = self.engine
         if new != self.held:
@@ -109,10 +141,22 @@ class RealTRexEnv(gym.Env):
         e = self.engine
         self.pending.append(int(action))
         self._apply_keys(self.pending.pop(0))
-        alive = e.frame()
+        alive, elapsed = True, 0
+        for _ in range(self.skip):
+            alive = e.frame()
+            elapsed += getattr(e, "last_dt", 8)
+            if not alive:
+                break
+        self.last_elapsed = float(max(elapsed, 1))
         self.t += 1
-        dt = getattr(e, "last_dt", 8)
-        reward = self.alive_reward * dt / MS_PER_FRAME
+        reward = self.alive_reward * elapsed / MS_PER_FRAME
+        for ob in e.obstacles:                                   # obstacles the dino has now left behind
+            if ob.x + ob.width < T_START_X and id(ob) not in self.passed:
+                self.passed.add(id(ob))
+                reward += self.pass_bonus
+        if len(self.passed) > 40:
+            live = {id(o) for o in e.obstacles}
+            self.passed &= live
         terminated = not alive
         if terminated:
             reward -= self.death_penalty
@@ -125,7 +169,7 @@ class RealTRexEnv(gym.Env):
     # ------------------------------------------------------------------
     def _observe(self) -> np.ndarray:
         e, o = self.engine, self._obs
-        dt = getattr(e, "last_dt", 8)
+        dt = self.last_elapsed
         ahead = [ob for ob in e.obstacles if ob.x + ob.width > T_START_X][:2]
         # observed obstacle speed from the first obstacle's movement since the last frame
         if ahead and self.prev_x is not None and self.prev_x[0] is ahead[0]:

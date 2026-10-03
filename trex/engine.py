@@ -230,6 +230,25 @@ class RealEngine:
         else:
             self._add_obstacle()
 
+    def inject(self, kind: int, x: float, y_index: int = 0, size: int = 1) -> Obstacle:
+        """Place an obstacle at a chosen position (used to create rare situations for training)."""
+        ob = Obstacle(kind, self.rng, self.speed)
+        ob.size = size if (size == 1 or OBSTACLE_TYPES[kind][4] <= self.speed) else 1
+        name, w, h, ys, multiple_speed, min_gap, _, boxes, offset = OBSTACLE_TYPES[kind]
+        ob.width = w * ob.size
+        ob.y = ys[min(y_index, len(ys) - 1)]
+        b = [list(bx) for bx in boxes]
+        if ob.size > 1:
+            b[1][2] = ob.width - b[0][2] - b[2][2]
+            b[2][0] = ob.width - b[2][2]
+        ob.boxes = b
+        ob.x = x
+        self.obstacles.append(ob)
+        self.obstacles.sort(key=lambda o: o.x)
+        self.history.insert(0, kind)
+        del self.history[MAX_OBSTACLE_DUPLICATION:]
+        return ob
+
     # ---- collisions -------------------------------------------------------------------------
     def _collides(self, ob: Obstacle) -> bool:
         tx, ty, tw, th = self.x + 1, self.y + 1, T_WIDTH - 2, T_HEIGHT - 2
