@@ -71,6 +71,7 @@ class EvalCallback(BaseCallback):
             print(f"[eval] {self.num_timesteps/1e6:6.1f}M frames  {row[1]:5.1f} min  median {med:7.0f}  mean {mean:7.0f}  "
                   f"p10 {row[4]:6.0f}  p90 {row[5]:7.0f}  max {int(sc.max()):6d}", flush=True)
             self.model.save(self.out / "latest")
+            self.model.save(self.out / f"ckpt_{round(self.num_timesteps / 1e6):03d}M")
             if (mean, med) > self.best:
                 self.best = (mean, med)
                 self.model.save(self.out / "best")
@@ -88,6 +89,9 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--scenario-prob", type=float, default=0.0, help="share of training episodes that start with close random obstacles")
     p.add_argument("--lr", type=float, default=3e-4)
+    p.add_argument("--ent-coef", type=float, default=0.01)
+    p.add_argument("--clip", type=float, default=0.2)
+    p.add_argument("--save-every", type=int, default=1_000_000, help="keep a checkpoint every N decisions")
     p.add_argument("--resume", default=None, help="path of a saved model to continue from")
     args = p.parse_args()
 
@@ -95,12 +99,15 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     venv = SubprocVecEnv([make_env(args.max_frames, args.seed * 1000 + i, args.scenario_prob) for i in range(args.n_envs)])
     if args.resume:
-        model = PPO.load(args.resume, env=venv, device="cpu")
+        # a polishing phase: smaller steps than the original run, so the policy stops swinging between checkpoints
+        model = PPO.load(args.resume, env=venv, device="cpu", custom_objects={
+            "learning_rate": args.lr, "lr_schedule": (lambda _: args.lr), "ent_coef": args.ent_coef,
+            "clip_range": (lambda _: args.clip)})
     else:
         model = PPO(
             "MlpPolicy", venv, device="cpu", seed=args.seed, verbose=0,
             n_steps=512, batch_size=1024, n_epochs=6, gamma=0.995, gae_lambda=0.95,
-            learning_rate=lambda f: args.lr * max(f, 0.1), clip_range=0.2, ent_coef=0.01, vf_coef=0.5,
+            learning_rate=lambda f: args.lr * max(f, 0.1), clip_range=args.clip, ent_coef=args.ent_coef, vf_coef=0.5,
             policy_kwargs=dict(net_arch=dict(pi=[128, 128], vf=[128, 128]), activation_fn=__import__("torch").nn.Tanh),
         )
     cb = EvalCallback(out, args.eval_every, args.eval_episodes, args.max_frames)

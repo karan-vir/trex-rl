@@ -59,7 +59,7 @@ class RealTRexEnv(gym.Env):
         self.death_penalty = death_penalty
         self.pass_bonus = pass_bonus
         self.decision_ms = decision_ms
-        self.scenario_prob = scenario_prob if randomize else 0.0
+        self.scenario_prob = scenario_prob
         self.action_space = spaces.Discrete(3)
         self.observation_space = spaces.Box(-5.0, 5.0, shape=(OBS_DIM,), dtype=np.float32)
         self.engine: RealEngine | None = None
