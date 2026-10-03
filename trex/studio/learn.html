@@ -305,7 +305,7 @@ function u6(){const rs=S.runs.filter(x=>x.has_final);if(!rs.length)return;
  if(!$('dgPick').dataset.b||$('dgPick').dataset.b!==rs.map(x=>x.name).join()+diagRun){$('dgPick').dataset.b=rs.map(x=>x.name).join()+diagRun;
   $('dgPick').innerHTML='Compare against run: '+rs.map(r=>`<span class="chip ${r.name===diagRun?'run':''}" style="cursor:pointer;margin:2px" data-r="${r.name}">${r.name} · beta ${r.params.beta} · ${(r.params.frames/1e6).toFixed(1)}M</span>`).join('');
   document.querySelectorAll('#dgPick [data-r]').forEach(d=>d.onclick=()=>{diagRun=d.dataset.r;$('dgPick').dataset.b='';startDiag();u6()})}
- const r=rs.find(x=>x.name===diagRun)||rs[0],ev=r.eval,a=ev[0],b=ev[ev.length-1],px=r.proxy;if(!a||!b)return;
+ const r=rs.find(x=>x.name===diagRun)||rs[0],ev=r.eval,a=ev[0],b=finalOf(ev),px=r.proxy;if(!a||!b)return;
  const p0=avg(px.slice(0,3).map(x=>x.proxy_reward)),p1=avg(px.slice(-3).map(x=>x.proxy_reward)),kl=avg(px.slice(-3).map(x=>x.kl));
  const dm=(b.mean-a.mean)/a.mean,d10=b.p10-a.p10;let msg,cls;
  const proxyUp=p1>p0+.05;
@@ -313,7 +313,7 @@ function u6(){const rs=S.runs.filter(x=>x.has_final);if(!rs.length)return;
  else if(dm<-0.08){cls='badc';msg=`The real score got <b>worse</b> (${fmt(a.mean)} → ${fmt(b.mean)})${proxyUp?' while the reward the agent was paid went up':''}. ${proxyUp?`That is ${TERMS.hack}: it learned to please the reward model in ways that don't help the real game.`:'The reward model may be too weak, or training too aggressive.'}`}
  else{cls='warn';msg=`The real score barely changed (${fmt(a.mean)} → ${fmt(b.mean)}). The reward model may be too weak to offer useful direction, or the model was already good where it counts.`}
  $('dgVerdict').innerHTML=`<div class="stats"><div class="stat"><b>${fmt(a.mean)}</b><span>reference: mean real score</span></div><div class="stat"><b class="${cls}">${fmt(b.mean)}</b><span>after RL: mean real score</span></div><div class="stat"><b>${fmt(a.p10)} → ${fmt(b.p10)}</b><span>worst 10% of games</span></div><div class="stat"><b>${kl!=null?kl.toFixed(3):'–'}</b><span>drift from reference (KL per step)</span></div></div><p class="${cls}" style="margin:6px 0 0">${msg}</p>
- <div class="sub" style="margin-top:6px">Proxy reward: ${p0.toFixed(2)} → ${p1.toFixed(2)} (what it was paid). Real score is measured on 24 fixed games, so small differences are noise.</div>`;
+ <div class="sub" style="margin-top:6px">Proxy reward: ${p0.toFixed(2)} → ${p1.toFixed(2)} (what it was paid). Each check uses 24 fixed games and "after RL" averages the last 3 checks, but differences under ~10% are still within noise.</div>`;
  const tips=[];
  if(kl>0.1)tips.push('The policy drifted far from the reference. Try a larger KL strength (beta).');
  if(dm<=0.08)tips.push('Collect more judgments (step 3) and retrain the reward model: check its agreement with the judge in step 4.');
@@ -322,6 +322,8 @@ function u6(){const rs=S.runs.filter(x=>x.has_final);if(!rs.length)return;
  tips.push('Go to <a href="#" onclick="go(7);return false">Experiments</a> to change one factor at a time.');
  $('dgNext').innerHTML='<ul style="margin:0;padding-left:20px">'+tips.map(t=>`<li>${t}</li>`).join('')+'</ul>'}
 const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+// one 24-game check is noisy, so "final" = average of the last 3 checks (or fewer if the run is young)
+const finalOf=ev=>{if(!ev.length)return null;const k=ev.slice(-3);return {mean:avg(k.map(e=>e.mean)),p10:avg(k.map(e=>e.p10)),frames:ev[ev.length-1].frames}};
 
 // ============ STEP 7 ============
 function s7(){return `<h2>Experiments</h2><p class="lead">Each card changes <b>one thing</b> and runs the whole pipeline (judge → reward model → RL → grade) for each variant. First predict, then see. Experiments run in the background; you can leave and come back.</p><div id="cards"></div>${nextbar()}`}
@@ -340,12 +342,12 @@ window.watchVar=(id,label,model)=>{expWatch[id]={label,model};const e=$('xw_'+id
 window.setPred=(id,i)=>{pred[id]=i;localStorage.setItem('rlhfPred',JSON.stringify(pred));if($('cards'))$('cards').dataset.k=''}
 window.runExp=async id=>{const r=await api('/api/rlhf/exp/start',{id});if(r.error)alert(r.error);setTimeout(refresh,1500)}
 function expResult(cd,res,chosen){
- const vs=res.variants.map(v=>{const ev=v.curve||[];return {v,ref:ev[0],fin:ev[ev.length-1],px:v.proxy||[]}});
+ const vs=res.variants.map(v=>{const ev=v.curve||[];return {v,ref:ev[0],fin:finalOf(ev),px:v.proxy||[]}});
  if(!vs.length)return '';
  const maxMean=6500;
  let h='<h3 style="margin-top:14px">Results</h3>';
  h+='<table><tr><th>variant</th><th class="n">judge agreement</th><th class="n">proxy reward (end)</th><th class="n">drift (KL)</th><th class="n">real score: mean</th><th class="n">worst 10%</th></tr>'+vs.map(x=>`<tr><td>${x.v.label}${x.v.stage!=='done'?` <span class="mini">(${x.v.stage})</span>`:''}</td><td class="n">${x.v.rm_agreement!=null?(x.v.rm_agreement*100).toFixed(0)+'%':'…'}</td><td class="n">${x.px.length?avg(x.px.slice(-3).map(p=>p.proxy_reward)).toFixed(2):'…'}</td><td class="n">${x.px.length?avg(x.px.slice(-3).map(p=>p.kl)).toFixed(3):'…'}</td><td class="n"><b>${x.fin?fmt(x.fin.mean):'…'}</b></td><td class="n">${x.fin?fmt(x.fin.p10):'…'}</td></tr>`).join('')+'</table>';
- const ref=vs[0].ref;if(ref)h+=`<div class="mini" style="margin-top:4px">Reference model before RL: mean ${fmt(ref.mean)}, worst 10% ${fmt(ref.p10)}.</div>`;
+ const ref=vs[0].ref;if(ref)h+=`<div class="mini" style="margin-top:4px">Reference model before RL: mean ${fmt(ref.mean)}, worst 10% ${fmt(ref.p10)}. Variant scores average the last 3 checks (each = 24 fixed games), so gaps under ~10% are noise.</div>`;
  h+='<div class="bars" style="margin-top:8px">'+vs.map(x=>x.fin?`<div class="b"><u>${x.v.label}</u><span class="t"><i style="width:${x.fin.mean/maxMean*100}%;background:var(--c1)"></i></span><span>${fmt(x.fin.mean)}</span></div>`:'').join('')+'</div>';
  if(cd.id==='overopt'&&vs[0].v.curve&&vs[0].v.curve.length>1){const v=vs[0];h+=`<div class="grid g2" style="margin-top:10px"><div><div class="sub">Reward the agent is paid (proxy)</div><canvas id="ox1" style="height:180px"></canvas></div><div><div class="sub">Real score (mean) — dashed: reference</div><canvas id="ox2" style="height:180px"></canvas></div></div>`;setTimeout(()=>{const px=v.proxy||[];const sm=smooth(px.map(q=>q.proxy_reward),6);chart($('ox1'),{series:[{c:'--c4',pts:px.map((p,i)=>[p.frames,sm[i]])}],ymin:-1,xfmt:x=>(x/1e6).toFixed(0)+'M',yfmt:x=>x.toFixed(1)});chart($('ox2'),{series:[{c:'--c1',pts:v.curve.map(e=>[e.frames,e.mean]),dots:1}],ymin:0,ymax:6800,hline:v.curve[0].mean,xfmt:x=>(x/1e6).toFixed(0)+'M'})},0)}
  const ws=expWatch[cd.id];
