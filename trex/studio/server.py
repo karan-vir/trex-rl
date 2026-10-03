@@ -26,6 +26,7 @@ import pygame                                                  # noqa: E402
 from trex.lab import draw                                      # noqa: E402
 from trex.lab.session import OBS_NAMES, Config, Session, find_checkpoints   # noqa: E402
 from trex.lab.trainer import KNOBS, NEW_ONLY, PRESETS          # noqa: E402
+from trex.studio import rlhf_api                               # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNS = ROOT / "runs"
@@ -64,7 +65,7 @@ def ps_jobs():
     except Exception:
         return out
     for line in txt.splitlines():
-        if "train_ppo.py" in line and "--name" in line and "multiprocessing" not in line:
+        if ("train_ppo.py" in line or "scripts.train_rlhf" in line) and "--name" in line and "multiprocessing" not in line:
             m = re.search(r"--name\s+(\S+)", line)
             if m:
                 out[m.group(1)] = int(line.split()[0])
@@ -204,7 +205,14 @@ class Watch:
                     rule_action=getattr(s, "rule_action", None))
 
 
-WATCH = Watch()
+WATCHES: dict[str, Watch] = {}
+
+
+def watch(w):
+    return WATCHES.setdefault(str(w or "0"), Watch())
+
+
+WATCH = watch("0")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -227,9 +235,13 @@ class Handler(BaseHTTPRequestHandler):
             elif u.path == "/api/knobs":
                 self._send(knobs())
             elif u.path == "/api/watch/step":
-                self._send(WATCH.step(int(q.get("n", 2)), int(q.get("act", 0)), q.get("boxes") == "1"))
-            else:
+                self._send(watch(q.get("w")).step(int(q.get("n", 2)), int(q.get("act", 0)), q.get("boxes") == "1"))
+            elif u.path == "/api/rlhf/state":
+                self._send(rlhf_api.state(find_checkpoints(RUNS)))
+            elif u.path == "/workbench":
                 self._send((Path(__file__).parent / "page.html").read_bytes(), "text/html; charset=utf-8")
+            else:
+                self._send((Path(__file__).parent / "learn.html").read_bytes(), "text/html; charset=utf-8")
         except Exception as ex:                                  # surface the problem in the page instead of hanging
             self._send(dict(error=f"{type(ex).__name__}: {ex}"))
 
@@ -238,7 +250,12 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(n) or b"{}")
         try:
             fn = {"/api/train": start_training, "/api/stop": stop_training, "/api/control": control,
-                  "/api/eval": start_eval, "/api/watch/new": WATCH.new}[self.path]
+                  "/api/eval": start_eval, "/api/watch/new": lambda b: watch(b.get("w")).new(b),
+                  "/api/rlhf/set_ref": rlhf_api.set_ref, "/api/rlhf/pair/next": rlhf_api.pair_next,
+                  "/api/rlhf/pair/label": rlhf_api.pair_label, "/api/rlhf/autolabel": rlhf_api.autolabel,
+                  "/api/rlhf/clear": rlhf_api.clear_prefs, "/api/rlhf/rm/train": rlhf_api.rm_train,
+                  "/api/rlhf/rm/probe": rlhf_api.rm_probe, "/api/rlhf/rl/start": rlhf_api.rl_start,
+                  "/api/rlhf/exp/start": rlhf_api.exp_start}[self.path]
             self._send(fn(body))
         except Exception as ex:
             self._send(dict(error=f"{type(ex).__name__}: {ex}"))

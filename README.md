@@ -141,13 +141,21 @@ submissions unless you pass `submit: 'top1'` .. `'top5'`.
 | 8 | Stretch: pixel observations / LLM agent | todo |
 
 
-## Training Studio (browser)
+## RLHF Lab (browser): learn post-training on the dino
 
 ```
 python scripts/studio.py        # opens http://127.0.0.1:8800
 ```
 
-Three tabs: **Train** (start a run, change learning rate / rewards / practice scenarios while it runs, branch a new
-run from any point, live learning curve with markers where you changed something), **Evaluate** (fixed-seed games
-under chosen conditions, compared with the hand-written rule) and **Watch** (see the game, what the network sees and
-decides, and its hidden layers; or play yourself). The older keyboard-driven Pygame view is `python scripts/lab.py`.
+A guided lesson that runs the full RLHF pipeline, with the game's true score hidden from training and used only to grade the result:
+
+1. **Pick a reference model** (the "SFT model"): a decent but flaky checkpoint.
+2. **Give feedback**: compare two clips on the same course and pick the better one (or let a "hidden judge" script label hundreds, optionally with label noise).
+3. **Train a reward model** (Bradley-Terry on clip pairs), check it against the judge on new clips, and see what it likes moment by moment.
+4. **RL against the reward model**: PPO with `reward = RM score - beta * KL(policy || reference)`; live charts of the proxy reward vs. the real score.
+5. **Diagnose**: reference vs. RL model on the same courses, with an automatic verdict (improved? over-optimized?).
+6. **Experiment cards**: predict, then run controlled variants (number of judgments, label noise, KL strength, long over-optimization run).
+
+Code: `trex/rlhf/` (clips, judge, reward model, experiments), `scripts/train_rlhf.py` (the RL stage), `trex/studio/` (server and pages).
+The raw PPO workbench (all hyperparameters, live setting changes, evaluation, watching) is at http://127.0.0.1:8800/workbench.
+The older keyboard-driven Pygame view is `python scripts/lab.py`.

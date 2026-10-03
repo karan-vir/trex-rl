@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RLHF Lab</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1c1c1a;--mute:#6b6b66;--line:#e4e3de;--c1:#2563eb;--c2:#0f9d58;--c3:#d97706;--c4:#9333ea;--bad:#dc2626;--soft:#f1f0eb;--llm:#eef3ff;--llmb:#c9d8ff}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--card:#1d1d1b;--ink:#ecebe6;--mute:#9a9992;--line:#34332f;--c1:#6ea0ff;--c2:#4cc38a;--c3:#f0a54a;--c4:#c08cf5;--bad:#f06a6a;--soft:#262624;--llm:#1b2233;--llmb:#33466e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,system-ui,sans-serif}
+.layout{display:grid;grid-template-columns:240px 1fr;max-width:1260px;margin:0 auto;gap:22px;padding:18px 16px 70px}
+@media(max-width:860px){.layout{grid-template-columns:1fr}}
+nav{position:sticky;top:14px;align-self:start}
+nav h1{font-size:18px;margin:0 0 2px}nav .sub{margin-bottom:14px}
+.st{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:10px;cursor:pointer;margin-bottom:3px;border:1px solid transparent}
+.st:hover{background:var(--soft)}.st.on{background:var(--card);border-color:var(--line);box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.st i{flex:none;width:24px;height:24px;border-radius:50%;background:var(--soft);display:grid;place-items:center;font:600 12px system-ui;font-style:normal;color:var(--mute);border:1px solid var(--line)}
+.st.done i{background:var(--c2);color:#fff;border-color:var(--c2)}
+.st b{font-size:13.5px;line-height:1.25}.st small{display:block;color:var(--mute);font-size:11.5px;font-weight:400}
+.sub{color:var(--mute);font-size:12.5px}
+main h2{font-size:22px;margin:0 0 4px}main .lead{color:var(--mute);margin:0 0 16px;font-size:15px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px}
+.card h3{margin:0 0 8px;font-size:15px}
+.llm{background:var(--llm);border:1px solid var(--llmb);border-radius:10px;padding:10px 13px;margin:12px 0;font-size:14px}
+.llm b:first-child{color:var(--c1)}
+.term{border-bottom:1px dotted var(--mute);cursor:help;position:relative}
+.term:hover::after{content:attr(data-tip);position:absolute;left:0;top:1.6em;z-index:9;width:280px;background:var(--ink);color:var(--bg);padding:8px 10px;border-radius:8px;font-size:12.5px;line-height:1.4;font-weight:400;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+button,select,input{font:inherit;color:var(--ink)}
+.btn{padding:9px 16px;border-radius:9px;border:1px solid var(--line);background:var(--card);cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--c1)}.btn.pri{background:var(--c1);color:#fff;border-color:var(--c1)}.btn.sm{padding:5px 11px;font-size:13px}.btn.bad{color:var(--bad)}.btn:disabled{opacity:.45;cursor:default}
+select,input[type=text],input[type=number]{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 9px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.nextbar{display:flex;justify-content:space-between;margin-top:18px}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.g2,.g3{grid-template-columns:1fr}}
+.pipe{display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;margin:6px 0 4px}
+.pipe div{flex:1 1 130px;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-size:13px}
+.pipe div b{display:block;font-size:13.5px;margin-bottom:2px}
+.pipe .ar{flex:0 0 auto;min-width:0;border:0;background:none;align-self:center;font-size:18px;color:var(--mute);padding:0}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}th{color:var(--mute);font-weight:500;font-size:12.5px}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+img.game{width:100%;display:block;border-radius:8px;border:1px solid var(--line);background:#f7f7f7;image-rendering:pixelated}
+.clip{position:relative}.clip .tag{position:absolute;left:8px;top:6px;background:var(--c1);color:#fff;border-radius:6px;padding:1px 9px;font-weight:700;font-size:13px}
+.vote{display:flex;gap:10px;margin-top:10px}.vote .btn{flex:1;padding:13px;font-size:15px}
+kbd{background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:0 6px;font:12px ui-monospace,Menlo,monospace}
+canvas{width:100%;display:block}
+.bar{height:9px;background:var(--line);border-radius:8px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--c1);transition:width .3s}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.stat{flex:1 1 110px;background:var(--soft);border-radius:10px;padding:8px 11px}.stat b{display:block;font-size:21px;font-variant-numeric:tabular-nums}.stat span{color:var(--mute);font-size:12px}
+.good{color:var(--c2)}.warn{color:var(--c3)}.badc{color:var(--bad)}
+.chip{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid var(--line)}.chip.run{background:rgba(15,157,88,.14);color:var(--c2)}
+.legend span{margin-right:14px;font-size:12px;color:var(--mute)}.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+.field{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.field:last-child{border:0}.field .t{flex:1}.field .t b{display:block}.field .t span{color:var(--mute);font-size:12.5px}
+details summary{cursor:pointer;color:var(--mute);font-size:13px;margin-top:6px}
+.err{color:var(--bad);font-size:13px}
+.pick{border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center}.pick.on{border-color:var(--c1);box-shadow:0 0 0 1px var(--c1)}
+.pick small{color:var(--mute)}
+.opt{display:flex;gap:8px;align-items:flex-start;padding:5px 0}.opt input{margin-top:5px}
+.toast{min-height:22px;font-size:14px}
+.bars .b{display:flex;align-items:center;gap:8px;margin:3px 0;font-size:13px}.bars .b u{text-decoration:none;width:150px;flex:none}.bars .b .t{flex:1;height:14px;background:var(--line);border-radius:4px;overflow:hidden}.bars .b .t i{display:block;height:100%}.bars .b span{width:62px;text-align:right;font-variant-numeric:tabular-nums}
+.expcard h3{font-size:16px}
+.mini{font-size:12.5px;color:var(--mute)}
+a{color:var(--c1)}
+</style></head><body>
+<div class="layout">
+<nav>
+ <h1>RLHF Lab</h1><div class="sub">Learn post-training by teaching a dinosaur.</div>
+ <div id="stepper"></div>
+ <div class="sub" style="margin-top:14px"><a href="/workbench">Advanced workbench</a> (raw PPO training, all knobs)</div>
+ <div class="sub" id="upd" style="margin-top:6px"></div>
+</nav>
+<main id="main"></main>
+</div>
+<script>
+const $=id=>document.getElementById(id), fmt=n=>Math.round(n).toLocaleString();
+const api=async(p,b)=>{const r=await fetch(p,b!==undefined?{method:'POST',body:JSON.stringify(b)}:{cache:'no-store'});return r.json()};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const T=(w,tip)=>`<span class="term" data-tip="${tip.replace(/"/g,'&quot;')}">${w}</span>`;
+const TERMS={
+ policy:T('policy','The decision-maker: a small neural network that turns what the dino sees into key presses. In an LLM: the language model that picks the next token.'),
+ episode:T('episode','One game, from start until the dino crashes. In an LLM: one generated response.'),
+ ref:T('reference model','The model RL starts from, and the one we are not allowed to drift too far from. In LLM post-training: the supervised fine-tuned (SFT) model.'),
+ rm:T('reward model','A second neural network that learns to score behaviour from human comparisons. It replaces a hand-written reward formula.'),
+ kl:T('KL leash','A penalty for making choices very different from the reference model. It keeps the policy sane and limits how much it can exploit mistakes of the reward model.'),
+ ppo:T('PPO','The reinforcement-learning algorithm doing the training: it nudges the policy toward actions that earned more reward, in small safe steps.'),
+ proxy:T('proxy reward','The reward the agent is actually paid: the reward model\'s opinion. It is only an approximation of what we really want.'),
+ judge:T('hidden judge','A script that reads the game\'s true state and says which clip was better. It plays two roles: a tireless stand-in for human labelers, and the grader we use to check honestly whether training worked.'),
+ bt:T('Bradley-Terry','A model of comparisons: the chance that clip A beats clip B is a sigmoid of (score A minus score B). It turns "A is better than B" votes into a training signal for numbers.'),
+ hack:T('over-optimization','Pushing so hard on an imperfect proxy that the real goal gets worse (Goodhart\'s law: when a measure becomes a target, it stops being a good measure).')
+};
+
+let S=null,step=0,built=-1;
+const STEPS=[
+ {t:'The big picture',s:'what RLHF is',done:()=>true},
+ {t:'The task',s:'what the dino sees and does',done:()=>step>1||false},
+ {t:'Pick a reference model',s:'where learning starts',done:()=>S&&S.project&&S.project.chosen},
+ {t:'Give feedback',s:'compare clips, pick the better',done:()=>S&&S.prefs.total>=30},
+ {t:'Train a reward model',s:'turn feedback into a score',done:()=>S&&S.rm},
+ {t:'Reinforcement learning',s:'train against the reward model',done:()=>S&&S.runs.some(r=>r.has_final)},
+ {t:'Diagnose',s:'did it really get better?',done:()=>false},
+ {t:'Experiments',s:'change one thing, see what happens',done:()=>S&&Object.values(S.experiments).some(e=>e.result&&e.result.done)}
+];
+function renderStepper(){$('stepper').innerHTML=STEPS.map((x,i)=>`<div class="st ${i===step?'on':''} ${x.done()&&i!==0?'done':''}" onclick="go(${i})"><i>${x.done()&&i!==0?'✓':i}</i><b>${x.t}<small>${x.s}</small></b></div>`).join('')}
+function go(i){stopAll();step=Math.max(0,Math.min(STEPS.length-1,i));built=-1;S&&render();window.scrollTo(0,0)}
+const nextbar=()=>`<div class="nextbar"><button class="btn" ${step===0?'disabled':''} onclick="go(step-1)">← Back</button>${step<STEPS.length-1?`<button class="btn pri" onclick="go(step+1)">Next: ${STEPS[step+1].t} →</button>`:''}</div>`;
+const llm=t=>`<div class="llm"><b>In an LLM:</b> ${t}</div>`;
+
+// ============ players (watch a game) ============
+const players={};
+async function startPlayer(id,cfg,imgId,infoId){const p=players[id]=players[id]||{gen:0};p.cfg=cfg;p.img=imgId;p.info=infoId;p.done=0;const gen=++p.gen;
+ const r=await api('/api/watch/new',{w:id,...cfg});if(r.error){return}show(p,r);{p.run=true;(async()=>{while(p.run&&p.gen===gen){try{if(!p.pause){const r=await api(`/api/watch/step?w=${id}&n=2&act=0`);if(r.error)break;show(p,r);
+   if(r.done){p.done=p.done||Date.now();if(Date.now()-p.done>1600){p.done=0;p.cfg={...p.cfg,seed:(p.cfg.seed||0)+1};await api('/api/watch/new',{w:id,...p.cfg})}}}}catch(e){}await new Promise(r=>setTimeout(r,33))}})()}}
+function show(p,r){const i=$(p.img);if(i)i.src='data:image/png;base64,'+r.png;const f=$(p.info);if(f)f.textContent=`score ${r.score}`+(r.done?' · '+r.crash:'')}
+function stopAll(){for(const k in players)players[k].run=false;clearInterval(clipTimer);document.removeEventListener('keydown',voteKey)}
+const refPath=()=>S.project.ref;
+
+// ============ charts ============
+function chart(cv,o){const dpr=devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
+ const L=48,R=10,Tp=10,B=24,xs=o.series.flatMap(s=>s.pts.map(p=>p[0])),ys=o.series.flatMap(s=>s.pts.map(p=>p[1]));
+ if(!xs.length){g.fillStyle=css('--mute');g.font='13px system-ui';g.fillText(o.empty||'waiting for data…',14,26);return}
+ const xmax=o.xmax||Math.max(...xs)||1,ymin=o.ymin!=null?o.ymin:Math.min(0,...ys),ymax=o.ymax||Math.max(...ys,o.hline||0,1)*1.08;
+ const X=v=>L+v/xmax*(W-L-R),Y=v=>Tp+(1-(v-ymin)/(ymax-ymin))*(H-Tp-B);
+ g.strokeStyle=css('--line');g.fillStyle=css('--mute');g.font='11px system-ui';g.lineWidth=1;
+ for(let i=0;i<=4;i++){const v=ymin+(ymax-ymin)*i/4;g.beginPath();g.moveTo(L,Y(v));g.lineTo(W-R,Y(v));g.stroke();g.textAlign='right';g.fillText(o.yfmt?o.yfmt(v):fmt(v),L-6,Y(v)+4)}
+ g.textAlign='center';for(let i=0;i<=5;i++){const v=xmax*i/5;g.fillText(o.xfmt?o.xfmt(v):v.toFixed(1),X(v),H-7)}
+ if(o.hline!=null){g.strokeStyle=css('--mute');g.setLineDash([5,4]);g.beginPath();g.moveTo(L,Y(o.hline));g.lineTo(W-R,Y(o.hline));g.stroke();g.setLineDash([]);g.fillStyle=css('--mute');g.textAlign='left';g.fillText(o.hlabel||'',L+4,Y(o.hline)-4)}
+ for(const s of o.series){g.strokeStyle=css(s.c);g.lineWidth=s.w||2;g.beginPath();s.pts.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));g.stroke();if(s.dots){g.fillStyle=css(s.c);s.pts.forEach(p=>{g.beginPath();g.arc(X(p[0]),Y(p[1]),3,0,7);g.fill()})}}
+ if(o.cursor!=null){g.strokeStyle=css('--bad');g.lineWidth=1.5;g.beginPath();g.moveTo(X(o.cursor),Tp);g.lineTo(X(o.cursor),H-B);g.stroke()}
+}
+const smooth=(a,k)=>a.map((_,i)=>{const s=a.slice(Math.max(0,i-k),i+1);return s.reduce((x,y)=>x+y,0)/s.length});
+
+// ============ STEP 0 ============
+function s0(){return `<h2>RLHF in one picture</h2><p class="lead">You will build the whole pipeline yourself, on a small problem you can watch, before applying it to language models.</p>
+<div class="card"><h3>The pipeline</h3>
+<div class="pipe"><div><b>1 · Reference model</b>a ${TERMS.policy} that already plays OK but makes mistakes</div><div class="ar">→</div>
+<div><b>2 · Human feedback</b>people compare two clips of its play: "A is better"</div><div class="ar">→</div>
+<div><b>3 · Reward model</b>a network learns to score play so it agrees with those comparisons</div><div class="ar">→</div>
+<div><b>4 · RL (${TERMS.ppo})</b>train the policy to earn high reward-model scores, on a ${TERMS.kl}</div><div class="ar">→</div>
+<div><b>5 · Check</b>did it get better for real, or only on the proxy?</div></div>
+<div class="sub">Steps 1–6 in the left menu follow this order. Step 7 lets you run controlled experiments.</div></div>
+<div class="card"><h3>Why not just write the reward ourselves?</h3>
+<p style="margin:0">For the dino we could (the game has a score). For a language model there is no formula for "helpful, honest, well written". People can't write it down, but they <i>can</i> say which of two answers is better. RLHF turns those comparisons into a reward. To practise honestly, we <b>pretend we have no score formula</b>: training only ever sees comparisons. The game's real score is kept aside as a ${TERMS.judge} to grade the result.</p></div>
+<div class="card"><h3>The dino ↔ LLM dictionary</h3><table>
+<tr><th></th><th>Dino</th><th>Language model</th></tr>
+<tr><td><b>Prompt / state</b></td><td>the course ahead: obstacles, speed</td><td>the conversation so far</td></tr>
+<tr><td><b>Action</b></td><td>one key press decision (nothing / jump / duck)</td><td>choosing the next token</td></tr>
+<tr><td><b>${TERMS.policy.replace('policy','Policy')}</b></td><td>22 numbers in → 3 probabilities out</td><td>the LLM itself</td></tr>
+<tr><td><b>Response</b></td><td>a 2.5-second clip of play</td><td>a sampled answer</td></tr>
+<tr><td><b>Human feedback</b></td><td>"clip A handled the cactus better"</td><td>"answer A is more helpful"</td></tr>
+<tr><td><b>${TERMS.rm}</b></td><td>scores each moment of play</td><td>scores a response</td></tr>
+<tr><td><b>${TERMS.kl}</b></td><td>penalty for acting unlike the reference dino</td><td>penalty for drifting from the SFT model</td></tr>
+<tr><td><b>True quality</b></td><td>the game's real score (hidden from training)</td><td>what humans really want but can't fully measure</td></tr></table></div>
+${nextbar()}`}
+
+// ============ STEP 1 ============
+function s1(){return `<h2>The task: what the dino sees and does</h2><p class="lead">Before any learning, understand the problem the ${TERMS.policy} faces.</p>
+<div class="grid g2"><div class="card"><h3>Watch a player that presses random keys</h3><img class="game" id="p1img"><div class="sub" id="p1info"></div>
+<div class="sub" style="margin-top:6px">It dies almost immediately. That's an untrained policy.</div></div>
+<div class="card"><h3>What the policy gets and gives</h3>
+<p style="margin-top:0"><b>Sees</b> 22 numbers about the next moment: how high it is, how fast the game is going, how far and how big the next two obstacles are, and which keys are held.</p>
+<p><b>Does</b> one of three things about 60 times per second: <i>nothing</i>, <i>hold jump</i>, <i>hold duck</i>.</p>
+<p><b>One game</b> (an ${TERMS.episode}) ends when it hits something. The longer it survives, the higher the real score.</p>
+<p style="margin-bottom:0">A policy is just a function from those 22 numbers to three probabilities. "Learning" means adjusting its weights so the probabilities become better.</p></div></div>
+${llm('the 22 numbers are like the tokens of the prompt; the 3 key choices are like the vocabulary (a tiny one: 3 words). A response is hundreds of such choices in a row. The mechanics of RLHF are identical.')}
+<div class="card"><h3>The key difficulty</h3><p style="margin:0">"Play well" is easy to <i>show</i> and hard to <i>specify</i>: how many points is a perfectly timed jump worth? what's the cost of an unnecessary jump? We could hand-tune a reward (that's what earlier steps of this project did), but RLHF skips this and learns it from comparisons.</p></div>
+${nextbar()}`}
+function m1(){startPlayer('p1',{agent:'random',seed:3,hz:120,jitter:0.3,latency:0,scenario:false},'p1img','p1info')}
+
+// ============ STEP 2 ============
+function s2(){return `<h2>Pick a reference model</h2><p class="lead">This is the starting policy (the "SFT model"). RL will begin here, and the ${TERMS.kl} ties it to this model.</p>
+<div class="card"><h3>Choose one, ideally decent but flaky</h3>
+<div class="sub" style="margin-bottom:8px">RLHF improves a model that is already roughly competent. The numbers are real scores from earlier training: <b>mean</b> score over test games and <b>worst 10%</b> (how bad its bad games are). Pick one with a clear gap between them: there's room to improve.</div>
+<div id="refList"></div>
+<div class="row" style="margin-top:10px"><button class="btn" id="refWatch">Watch the selected model play</button><button class="btn" id="refGrade">Grade it on 30 fresh games</button><span class="sub" id="refMsg"></span></div></div>
+<div class="grid g2"><div class="card"><h3>Watch</h3><img class="game" id="p2img"><div class="sub" id="p2info"></div></div>
+<div class="card"><h3>Baseline grade</h3><div id="refGradeOut" class="sub">Press "Grade it" to measure this model on the real score. Remember this number: the whole point of RLHF is to beat it.</div></div></div>
+${llm('you start from a model that already follows instructions after supervised fine-tuning. RLHF does not teach it from scratch; it refines behaviour using preferences.')}
+${nextbar()}`}
+function m2(){fillRefList();watchRef();
+ $('refWatch').onclick=watchRef;$('refGrade').onclick=async()=>{const r=await api('/api/eval',{model:refPath()+'.zip',episodes:30,cap:20000,hz:120,jitter:0.3,latency:0,scenario:0});$('refMsg').textContent='grading in the background…'};}
+function watchRef(){startPlayer('p2',{agent:'ppo',model:refPath(),seed:7,hz:120,jitter:0.3,latency:0,scenario:true},'p2img','p2info')}
+function fillRefList(){const c=S.ckpts.filter(x=>x.mean!=null&&x.run==='ppo_d');
+ $('refList').innerHTML=c.map(x=>{const rec=x.path.endsWith('ckpt_007M');return `<div class="pick ${x.path===refPath()?'on':''}" data-p="${x.path}"><span><b>${x.run}/${x.name}</b> ${rec?'<span class="chip run">recommended</span>':''}</span><small>mean ${fmt(x.mean)} · worst 10%: ${fmt(x.p10)}</small></div>`}).join('')||'<div class="sub">No checkpoints found. Train something in the workbench first.</div>';
+ document.querySelectorAll('#refList .pick').forEach(d=>d.onclick=async()=>{await api('/api/rlhf/set_ref',{ref:d.dataset.p,chosen:true});S.project.ref=d.dataset.p;S.project.chosen=true;fillRefList();watchRef();await refresh()})}
+function u2(){const e=S.evals&&S.evals.filter(x=>x.model===refPath()+'.zip'&&x.done).sort((a,b)=>b.finished-a.finished)[0];if(!e)return;const s=e.scores,mean=s.reduce((a,b)=>a+b,0)/s.length,sorted=[...s].sort((a,b)=>a-b),surv=e.killers.filter(k=>k==='survived to cap').length;
+ $('refGradeOut').innerHTML=`<div class="stats"><div class="stat"><b>${fmt(mean)}</b><span>mean real score</span></div><div class="stat"><b>${fmt(sorted[Math.floor(s.length*.1)])}</b><span>worst 10% of games</span></div><div class="stat"><b>${surv}/${s.length}</b><span>games survived to the cap</span></div></div><div class="sub">(a score near 6,195 = survived the whole time limit)</div>`}
+
+// ============ STEP 3 ============
+let curPair=null,clipI=0,clipTimer=null,voted=false;
+function s3(){return `<h2>Give feedback</h2><p class="lead">You are the human in "human feedback". You'll see two clips that start on the <b>same course</b> but were played differently. Pick the better one.</p>
+<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">Which clip plays better?</h3><span class="sub" id="fbCount"></span></div>
+<div class="sub" style="margin:4px 0 10px">Better = survives, handles obstacles cleanly, no pointless jumping. If you can't tell, or both are fine, choose "same".</div>
+<div class="clip"><span class="tag">A</span><img class="game" id="clipA"></div><div style="height:8px"></div><div class="clip"><span class="tag">B</span><img class="game" id="clipB"></div>
+<div class="vote"><button class="btn" id="vA">A is better <kbd>←</kbd></button><button class="btn" id="vS">About the same <kbd>↓</kbd></button><button class="btn" id="vB">B is better <kbd>→</kbd></button></div>
+<div class="toast sub" id="fbToast"></div></div>
+<div class="grid g2"><div class="card"><h3>No time to click 300 times?</h3>
+<div class="sub" style="margin-bottom:8px">Real RLHF needs thousands of comparisons, often from paid annotators or an AI labeler. Let the ${TERMS.judge} label for you:</div>
+<div class="row"><select id="alN"><option>100</option><option selected>300</option><option>1000</option></select> comparisons, labels wrong
+<select id="alNoise"><option value="0">0%</option><option value="0.1">10%</option><option value="0.2">20%</option></select><button class="btn pri sm" id="alGo">Label them</button></div>
+<div class="bar" style="margin-top:10px"><i id="alBar" style="width:0"></i></div><div class="sub" id="alMsg"></div></div>
+<div class="card"><h3>Your dataset</h3><div id="dsStats" class="sub"></div><div class="row" style="margin-top:8px"><button class="btn sm bad" id="dsClear">Delete all judgments</button></div>
+<div class="sub" style="margin-top:8px">Rule of thumb from this lab: ~300 judgments gives a usable reward model; more is better. Mixing your own with the judge's is fine.</div></div></div>
+${llm('annotators see two model responses to the same prompt and choose the better one (or tie). The dataset is just (prompt, response A, response B, winner). That is exactly what you are producing.')}
+${nextbar()}`}
+function m3(){$('vA').onclick=()=>vote('A');$('vB').onclick=()=>vote('B');$('vS').onclick=()=>vote('same');
+ $('alGo').onclick=async()=>{const r=await api('/api/rlhf/autolabel',{n:+$('alN').value,noise:+$('alNoise').value});if(r.error)$('alMsg').textContent=r.error};
+ $('dsClear').onclick=async()=>{if(confirm('Delete all judgments and the reward model?')){await api('/api/rlhf/clear',{});await refresh()}};
+ document.addEventListener('keydown',voteKey);nextPair()}
+function voteKey(e){if(step!==3)return;if(e.key==='ArrowLeft'){vote('A');e.preventDefault()}else if(e.key==='ArrowRight'){vote('B');e.preventDefault()}else if(e.key==='ArrowDown'){vote('same');e.preventDefault()}}
+async function nextPair(){clearInterval(clipTimer);voted=false;$('fbToast').textContent='loading two clips…';const p=await api('/api/rlhf/pair/next',{});if(step!==3)return;curPair=p;clipI=0;$('fbToast').innerHTML=`Course: ${p.danger?'<b>dangerous start</b>, ':''}speed ${p.speed}`;
+ clipTimer=setInterval(()=>{const n=Math.max(p.A.length,p.B.length);const pause=8;if(clipI>=n+pause)clipI=0;const i=Math.min(clipI,n-1);
+  $('clipA').src='data:image/png;base64,'+p.A[Math.min(i,p.A.length-1)];$('clipB').src='data:image/png;base64,'+p.B[Math.min(i,p.B.length-1)];clipI++},60)}
+async function vote(l){if(!curPair||voted)return;voted=true;const r=await api('/api/rlhf/pair/label',{id:curPair.id,label:l});if(r.error){$('fbToast').textContent=r.error;nextPair();return}
+ const tn={A:'A',B:'B',same:'neither'}[r.truth];$('fbToast').innerHTML=r.agree?`<span class="good">Saved. The hidden judge agrees with you.</span>`:`<span class="warn">Saved. The hidden judge saw it differently (it picked ${tn}).</span> <span class="mini">Disagreement is normal: human feedback is noisy.</span>`;
+ setTimeout(()=>{if(step===3)nextPair()},1100)}
+function u3(){const p=S.prefs;$('fbCount').textContent=`${p.human} from you · ${p.total} total`;
+ $('dsStats').innerHTML=`<b>${p.total}</b> judgments: ${p.human} yours, ${p.oracle} from the hidden judge.<br>A better: ${p.a} · B better: ${p.b} · same: ${p.same}`+(p.human_agreement!=null?`<br>You agreed with the hidden judge on <b>${(p.human_agreement*100).toFixed(0)}%</b> of your votes.`:'');
+ const t=S.tasks.autolabel;if(t){$('alBar').style.width=(t.done/t.total*100)+'%';$('alMsg').textContent=t.running?`labelling… ${t.done}/${t.total}`:`done: ${t.done} labelled`}}
+
+// ============ STEP 4 ============
+let probe=null,probeI=0,probeTimer=null;
+function s4(){return `<h2>Train a reward model</h2><p class="lead">Turn the comparisons into a number: "how good is this moment?"</p>
+<div class="grid g2"><div class="card"><h3>1 · Train</h3>
+<p class="sub" style="margin-top:0">The model gives each moment of a clip a score. A clip's score is the average of its moments. It is trained so that, for every comparison you made, the winner scores higher: a ${TERMS.bt} model.</p>
+<div class="row"><button class="btn pri" id="rmGo">Train on <span id="rmN">0</span> judgments</button><span class="err" id="rmErr"></span></div>
+<div class="bar" style="margin-top:10px"><i id="rmBar" style="width:0"></i></div><div class="sub" id="rmMsg"></div>
+<canvas id="rmChart" style="height:190px;margin-top:6px"></canvas>
+<div class="legend"><span><i style="background:var(--c3)"></i>loss on the training comparisons (lower = fits better)</span><span><i style="background:var(--c2)"></i>accuracy on comparisons held out of training</span></div></div>
+<div class="card"><h3>2 · Is it any good?</h3><div id="rmReport" class="sub">Train it first.</div></div></div>
+<div class="card"><h3>3 · Look inside: what does it like?</h3>
+<div class="sub" style="margin-bottom:8px">A fresh clip, with the reward model's score for every moment drawn underneath. Green = it likes this moment, red = it dislikes it. Does it dislike the right things (e.g. just before a crash)?</div>
+<div class="row" style="margin-bottom:8px"><button class="btn" id="probeGo">Show me another clip</button></div>
+<img class="game" id="probeImg"><canvas id="probeChart" style="height:110px;margin-top:6px"></canvas><div class="sub" id="probeInfo"></div></div>
+${llm('reward models are usually the LLM itself with a scalar head, trained with this same pairwise loss on (chosen, rejected) responses. Their accuracy on held-out comparisons (often 65-75% for real preferences) bounds how much RL can help.')}
+${nextbar()}`}
+function m4(){$('rmGo').onclick=async()=>{const r=await api('/api/rlhf/rm/train',{epochs:60});$('rmErr').textContent=r.error||''};$('probeGo').onclick=doProbe;if(S.rm)doProbe()}
+async function doProbe(){clearInterval(probeTimer);const r=await api('/api/rlhf/rm/probe',{});if(r.error){$('probeInfo').textContent=r.error;return}probe=r;probeI=0;
+ $('probeInfo').textContent=r.crashed?`This clip ends in a crash after ${r.steps} decisions.`:`This clip survives (${r.passes} obstacles cleared).`;
+ probeTimer=setInterval(()=>{if(step!==4){clearInterval(probeTimer);return}const n=probe.frames.length;if(probeI>=n+6)probeI=0;const i=Math.min(probeI,n-1);$('probeImg').src='data:image/png;base64,'+probe.frames[i];
+  const c=$('probeChart');drawProbe(c,probe,i);probeI++},70)}
+function drawProbe(cv,p,i){const dpr=devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
+ const r=p.r,n=r.length,m=Math.max(2,...r.map(Math.abs)),bw=W/Math.max(n,40),mid=H/2;g.strokeStyle=css('--line');g.beginPath();g.moveTo(0,mid);g.lineTo(W,mid);g.stroke();
+ r.forEach((v,k)=>{g.fillStyle=v>=0?css('--c2'):css('--bad');g.globalAlpha=k<=i?1:.25;const h=v/m*(mid-4);g.fillRect(k*bw+1,v>=0?mid-h:mid,bw-2,Math.abs(h))});g.globalAlpha=1;g.fillStyle=css('--mute');g.font='11px system-ui';g.fillText('reward model score per moment (standardised)',6,12)}
+let probed=false;
+function u4(){if(S.rm&&!probed&&!probe){probed=true;doProbe()}$('rmN').textContent=S.prefs.total;const t=S.tasks.rm;$('rmGo').disabled=!!(t&&t.running)||S.prefs.total<10;
+ const hist=(t&&t.hist&&t.hist.length?t.hist:(S.rm?S.rm.hist:[]));
+ if(t&&t.running){$('rmBar').style.width=(t.epoch/t.total*100)+'%';$('rmMsg').textContent=t.stage||`epoch ${t.epoch}/${t.total}`}else{$('rmBar').style.width=hist.length?'100%':'0';$('rmMsg').textContent=''}
+ if(t&&t.error)$('rmErr').textContent=t.error;
+ chart($('rmChart'),{series:[{c:'--c3',pts:hist.map(h=>[h.epoch,h.loss])},{c:'--c2',pts:hist.filter(h=>h.val_acc!=null).map(h=>[h.epoch,h.val_acc])}],ymin:0,ymax:1,xmax:60,yfmt:v=>v.toFixed(1),xfmt:v=>Math.round(v),empty:'training curve appears here'});
+ if(S.rm){const a=S.rm.agreement,last=S.rm.hist[S.rm.hist.length-1];
+  $('rmReport').innerHTML=`<div class="stats"><div class="stat"><b>${(a*100).toFixed(0)}%</b><span>agrees with the hidden judge on 120 NEW clip pairs</span></div><div class="stat"><b>${last.val_acc!=null?(last.val_acc*100).toFixed(0)+'%':'–'}</b><span>accuracy on held-out comparisons</span></div><div class="stat"><b>${S.rm.n_prefs}</b><span>judgments used</span></div></div>
+  <div class="sub">${a>=.93?'<span class="good">A strong reward model.</span> It rarely disagrees with the judge.':a>=.8?'<span class="warn">Decent, but it will be fooled sometimes.</span> More judgments would help (try the experiment "How many judgments?").':'<span class="badc">Weak.</span> RL will optimise a poor proxy. Collect more judgments and retrain.'} The agreement on <i>new</i> clips matters more than the training fit: a model can memorise its training comparisons and still be useless.</div>`}}
+
+// ============ STEP 5 ============
+function s5(){return `<h2>Reinforcement learning against the reward model</h2><p class="lead">Now the ${TERMS.ppo} stage: the policy plays thousands of games and is paid by the reward model, not by the game score.</p>
+<div class="grid g2"><div class="card"><h3>Settings</h3>
+<div class="field"><div class="t"><b>${TERMS.kl} strength (beta)</b><span>How much to punish acting unlike the reference model. 0 = free to do anything the reward model likes.</span></div>
+<select id="rlBeta"><option value="0">0 (no leash)</option><option value="0.02">0.02</option><option value="0.05" selected>0.05</option><option value="0.2">0.2</option><option value="1">1 (tight)</option></select></div>
+<div class="field"><div class="t"><b>Training length</b><span>More steps = more optimisation pressure. 1M steps takes about 2 minutes.</span></div>
+<select id="rlLen"><option value="500000">0.5M</option><option value="1500000" selected>1.5M</option><option value="3000000">3M</option><option value="6000000">6M</option></select></div>
+<details><summary>advanced</summary>
+<div class="field"><div class="t"><b>Reward scale</b><span>Multiplier on the reward model's score (it is standardised first).</span></div><select id="rlScale"><option>0.03</option><option selected>0.1</option><option>0.3</option></select></div>
+<div class="field"><div class="t"><b>Learning rate</b><span>Size of each policy update.</span></div><select id="rlLr"><option value="0.00003">3e-5</option><option value="0.0001" selected>1e-4</option><option value="0.0003">3e-4</option></select></div></details>
+<div style="margin-top:10px" class="row"><button class="btn pri" id="rlGo">▶ Start RL</button><span class="err" id="rlErr"></span></div>
+<div class="sub" style="margin-top:6px" id="rlHelp"></div></div>
+<div class="card"><h3>What's happening</h3><div class="sub" style="margin-top:0">Each step the policy gets <code>reward = reward-model score − beta × (how much more likely it is to choose this action than the reference model was)</code>. The second part is the ${TERMS.kl}.
+Every so often the policy is graded on the <b>real</b> game score, which training never sees.</div>
+<div id="rlPick" style="margin-top:8px"></div></div></div>
+<div class="grid g2"><div class="card"><h3>What the agent is paid</h3><div class="sub">${TERMS.proxy} (reward model score) per step, smoothed. Should go up: that's what it's optimising.</div><canvas id="rlProxy" style="height:210px"></canvas>
+<div class="legend"><span><i style="background:var(--c4)"></i>proxy reward</span><span><i style="background:var(--c3)"></i>drift from reference (KL, x10)</span></div></div>
+<div class="card"><h3>How good it really is</h3><div class="sub">Real game score on 24 test games (${TERMS.judge}). The dashed line is the reference model.</div><canvas id="rlGold" style="height:210px"></canvas>
+<div class="legend"><span><i style="background:var(--c1)"></i>mean score</span><span><i style="background:var(--c3)"></i>worst 10% of games</span></div></div></div>
+<div class="card"><div class="row"><b id="rlStatus"></b><span class="sub" id="rlEta"></span><span style="flex:1"></span><button class="btn sm bad" id="rlStop" hidden>■ Stop</button></div><div class="bar" style="margin-top:8px"><i id="rlBar" style="width:0"></i></div><details><summary>raw training log</summary><pre id="rlLog" style="font:11px ui-monospace,monospace;overflow:auto"></pre></details></div>
+${llm('this is the PPO stage of RLHF. Each rollout is a batch of sampled responses, scored by the reward model, with a per-token KL term to the SFT model. Watching real quality (here: game score) against the proxy is how people detect over-optimization.')}
+${nextbar()}`}
+let rlSel=null;
+function m5(){$('rlGo').onclick=async()=>{const r=await api('/api/rlhf/rl/start',{beta:+$('rlBeta').value,frames:+$('rlLen').value,scale:+$('rlScale').value,lr:+$('rlLr').value});if(r.error){$('rlErr').textContent=r.error;return}$('rlErr').textContent='';rlSel=r.name;setTimeout(refresh,2500)};
+ $('rlStop').onclick=async()=>{await api('/api/stop',{name:rlSel});setTimeout(refresh,1500)};
+ if(!S.rm)$('rlHelp').innerHTML='<span class="warn">Train the reward model first (step 4).</span>'}
+function u5(){const runs=S.runs;if(!rlSel&&runs.length)rlSel=(runs.find(r=>r.running)||runs[0]).name;
+ $('rlPick').innerHTML=runs.length?'<div class="sub">Runs (click to view):</div>'+runs.slice(0,6).map(r=>`<span class="chip ${r.name===rlSel?'run':''}" style="cursor:pointer;margin:2px" data-r="${r.name}">${r.name} · beta ${r.params.beta}${r.running?' · running':''}</span>`).join(''):'';
+ document.querySelectorAll('#rlPick [data-r]').forEach(d=>d.onclick=()=>{rlSel=d.dataset.r;u5()});
+ const r=runs.find(x=>x.name===rlSel);if(!r){chart($('rlProxy'),{series:[]});chart($('rlGold'),{series:[],empty:'start a run to see results'});return}
+ const px=r.proxy,ev=r.eval,ref=ev[0],total=r.params.frames;
+ chart($('rlProxy'),{series:[{c:'--c4',pts:px.map((p,i)=>[p.frames,smooth(px.map(q=>q.proxy_reward),4)[i]]),w:2.5},{c:'--c3',pts:px.map((p,i)=>[p.frames,smooth(px.map(q=>q.kl),4)[i]*10]),w:1.5}],ymin:-1,xmax:total,xfmt:v=>(v/1e6).toFixed(1)+'M',yfmt:v=>v.toFixed(1),empty:'first points appear after the first training batch'});
+ chart($('rlGold'),{series:[{c:'--c1',pts:ev.map(e=>[e.frames,e.mean]),dots:1,w:2.5},{c:'--c3',pts:ev.map(e=>[e.frames,e.p10]),dots:1}],ymin:0,ymax:6800,xmax:total,hline:ref?ref.mean:null,hlabel:'reference model (mean)',xfmt:v=>(v/1e6).toFixed(1)+'M'});
+ const last=ev[ev.length-1];$('rlStatus').innerHTML=r.running?`<span class="chip run">training</span> ${r.name}`:`<span class="chip">finished</span> ${r.name}`;
+ $('rlBar').style.width=(last?Math.min(100,last.frames/total*100):0)+'%';
+ const m=ev.length>1?last.minutes:0,eta=r.running&&last&&last.frames>0?Math.round((total-last.frames)/(last.frames/Math.max(last.minutes,.05))):null;$('rlEta').textContent=eta!=null?`about ${eta} min left`:'';
+ $('rlStop').hidden=!r.running;$('rlStop').onclick=async()=>{await api('/api/stop',{name:r.name});setTimeout(refresh,1500)};
+ $('rlLog').textContent=r.tail.join('\n')}
+
+// ============ STEP 6 ============
+let diagRun=null;
+function s6(){return `<h2>Diagnose: did it really get better?</h2><p class="lead">The reward model said "good". The hidden judge's real score tells the truth.</p>
+<div class="card"><div id="dgPick" class="sub">Finish an RL run first (step 5).</div><div id="dgVerdict"></div></div>
+<div class="grid g2"><div class="card"><h3>Before: reference model</h3><img class="game" id="d1img"><div class="sub" id="d1info"></div></div>
+<div class="card"><h3>After: RL-trained model</h3><img class="game" id="d2img"><div class="sub" id="d2info"></div></div></div>
+<div class="sub" style="margin:-6px 0 12px">Both play the exact same courses at the same time (dangerous starts, so the differences show).</div>
+<div class="card"><h3>What to try next</h3><div id="dgNext" class="sub"></div></div>
+${llm('after RLHF you compare against the SFT model with <i>independent</i> evaluations (held-out human ratings, win rate vs. the SFT model, benchmarks), not the reward model itself. Winning on the reward model alone proves nothing.')}
+${nextbar()}`}
+function m6(){startDiag()}
+function startDiag(){const r=S.runs.filter(x=>x.has_final);if(!r.length)return;if(!diagRun)diagRun=r[0].name;const run=S.runs.find(x=>x.name===diagRun);
+ startPlayer('d1',{agent:'ppo',model:refPath(),seed:21,hz:120,jitter:0.3,latency:0,scenario:true},'d1img','d1info');
+ startPlayer('d2',{agent:'ppo',model:`runs/${run.name}/final`,seed:21,hz:120,jitter:0.3,latency:0,scenario:true},'d2img','d2info')}
+function u6(){const rs=S.runs.filter(x=>x.has_final);if(!rs.length)return;
+ if(!$('dgPick').dataset.b||$('dgPick').dataset.b!==rs.map(x=>x.name).join()+diagRun){$('dgPick').dataset.b=rs.map(x=>x.name).join()+diagRun;
+  $('dgPick').innerHTML='Compare against run: '+rs.map(r=>`<span class="chip ${r.name===diagRun?'run':''}" style="cursor:pointer;margin:2px" data-r="${r.name}">${r.name} · beta ${r.params.beta} · ${(r.params.frames/1e6).toFixed(1)}M</span>`).join('');
+  document.querySelectorAll('#dgPick [data-r]').forEach(d=>d.onclick=()=>{diagRun=d.dataset.r;$('dgPick').dataset.b='';startDiag();u6()})}
+ const r=rs.find(x=>x.name===diagRun)||rs[0],ev=r.eval,a=ev[0],b=ev[ev.length-1],px=r.proxy;if(!a||!b)return;
+ const p0=avg(px.slice(0,3).map(x=>x.proxy_reward)),p1=avg(px.slice(-3).map(x=>x.proxy_reward)),kl=avg(px.slice(-3).map(x=>x.kl));
+ const dm=(b.mean-a.mean)/a.mean,d10=b.p10-a.p10;let msg,cls;
+ const proxyUp=p1>p0+.05;
+ if(dm>0.08){cls='good';msg=`The real score improved: mean <b>${fmt(a.mean)} → ${fmt(b.mean)}</b> (${(dm*100).toFixed(0)}% better) and the worst 10% of games went <b>${fmt(a.p10)} → ${fmt(b.p10)}</b>. Learning from comparisons alone worked.`}
+ else if(dm<-0.08){cls='badc';msg=`The real score got <b>worse</b> (${fmt(a.mean)} → ${fmt(b.mean)})${proxyUp?' while the reward the agent was paid went up':''}. ${proxyUp?`That is ${TERMS.hack}: it learned to please the reward model in ways that don't help the real game.`:'The reward model may be too weak, or training too aggressive.'}`}
+ else{cls='warn';msg=`The real score barely changed (${fmt(a.mean)} → ${fmt(b.mean)}). The reward model may be too weak to offer useful direction, or the model was already good where it counts.`}
+ $('dgVerdict').innerHTML=`<div class="stats"><div class="stat"><b>${fmt(a.mean)}</b><span>reference: mean real score</span></div><div class="stat"><b class="${cls}">${fmt(b.mean)}</b><span>after RL: mean real score</span></div><div class="stat"><b>${fmt(a.p10)} → ${fmt(b.p10)}</b><span>worst 10% of games</span></div><div class="stat"><b>${kl!=null?kl.toFixed(3):'–'}</b><span>drift from reference (KL per step)</span></div></div><p class="${cls}" style="margin:6px 0 0">${msg}</p>
+ <div class="sub" style="margin-top:6px">Proxy reward: ${p0.toFixed(2)} → ${p1.toFixed(2)} (what it was paid). Real score is measured on 24 fixed games, so small differences are noise.</div>`;
+ const tips=[];
+ if(kl>0.1)tips.push('The policy drifted far from the reference. Try a larger KL strength (beta).');
+ if(dm<=0.08)tips.push('Collect more judgments (step 3) and retrain the reward model: check its agreement with the judge in step 4.');
+ if(dm<-0.08&&proxyUp)tips.push('Over-optimization: shorten training, strengthen the KL leash, or improve the reward model. Experiment 4 reproduces this on purpose.');
+ if(dm>0.08)tips.push('Try fewer judgments or noisier labels in the experiments to see how fragile this success is.');
+ tips.push('Go to <a href="#" onclick="go(7);return false">Experiments</a> to change one factor at a time.');
+ $('dgNext').innerHTML='<ul style="margin:0;padding-left:20px">'+tips.map(t=>`<li>${t}</li>`).join('')+'</ul>'}
+const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+
+// ============ STEP 7 ============
+function s7(){return `<h2>Experiments</h2><p class="lead">Each card changes <b>one thing</b> and runs the whole pipeline (judge → reward model → RL → grade) for each variant. First predict, then see. Experiments run in the background; you can leave and come back.</p><div id="cards"></div>${nextbar()}`}
+const pred=JSON.parse(localStorage.getItem('rlhfPred')||'{}');
+function m7(){$('cards').dataset.k=''}
+function u7(){if(!S)return;const c=$('cards');const key=JSON.stringify(Object.values(S.experiments).map(e=>[e.running,e.result&&e.result.stage,e.result&&e.result.variants.length,e.result&&e.result.variants.map(v=>(v.curve||[]).length)]));if(c.dataset.k===key)return;c.dataset.k=key;
+ c.innerHTML=S.cards.map(cd=>{const e=S.experiments[cd.id],res=e.result;const chosen=pred[cd.id];
+  return `<div class="card expcard"><div class="row" style="justify-content:space-between"><h3 style="margin:0">${cd.icon} · ${cd.title}</h3>${e.running?'<span class="chip run">running</span>':res&&res.done?'<span class="chip">done</span>':''}</div>
+  <p>${cd.question}</p><div class="mini">Variants: ${cd.variants.map(v=>v.label).join(' · ')}</div>
+  <div style="margin:10px 0"><b>Your prediction:</b>${cd.predict.map((p,i)=>`<label class="opt"><input type="radio" name="pr_${cd.id}" ${chosen===i?'checked':''} onchange="setPred('${cd.id}',${i})"> <span>${p}</span></label>`).join('')}</div>
+  <div class="row"><button class="btn pri" ${e.running||chosen==null?'disabled':''} onclick="runExp('${cd.id}')">${res&&res.done?'Run again':'Run this experiment'}</button><span class="mini">${chosen==null?'Pick a prediction first.':''} ${e.running&&res?res.stage:''}</span></div>
+  ${res?expResult(cd,res,chosen):''}</div>`}).join('');
+ for(const id in expWatch){const w=expWatch[id];if($('xw_'+id))startPlayer('x_'+id,{agent:'ppo',model:w.model,seed:5,hz:120,jitter:0.3,latency:0,scenario:true},'xw_'+id,'xi_'+id)}}
+const expWatch={};
+window.watchVar=(id,label,model)=>{expWatch[id]={label,model};const e=$('xw_'+id);if(!e){$('cards').dataset.k='';u7();}startPlayer('x_'+id,{agent:'ppo',model,seed:5,hz:120,jitter:0.3,latency:0,scenario:true},'xw_'+id,'xi_'+id)};
+window.setPred=(id,i)=>{pred[id]=i;localStorage.setItem('rlhfPred',JSON.stringify(pred));if($('cards'))$('cards').dataset.k=''}
+window.runExp=async id=>{const r=await api('/api/rlhf/exp/start',{id});if(r.error)alert(r.error);setTimeout(refresh,1500)}
+function expResult(cd,res,chosen){
+ const vs=res.variants.map(v=>{const ev=v.curve||[];return {v,ref:ev[0],fin:ev[ev.length-1],px:v.proxy||[]}});
+ if(!vs.length)return '';
+ const maxMean=6500;
+ let h='<h3 style="margin-top:14px">Results</h3>';
+ h+='<table><tr><th>variant</th><th class="n">judge agreement</th><th class="n">proxy reward (end)</th><th class="n">drift (KL)</th><th class="n">real score: mean</th><th class="n">worst 10%</th></tr>'+vs.map(x=>`<tr><td>${x.v.label}${x.v.stage!=='done'?` <span class="mini">(${x.v.stage})</span>`:''}</td><td class="n">${x.v.rm_agreement!=null?(x.v.rm_agreement*100).toFixed(0)+'%':'…'}</td><td class="n">${x.px.length?avg(x.px.slice(-3).map(p=>p.proxy_reward)).toFixed(2):'…'}</td><td class="n">${x.px.length?avg(x.px.slice(-3).map(p=>p.kl)).toFixed(3):'…'}</td><td class="n"><b>${x.fin?fmt(x.fin.mean):'…'}</b></td><td class="n">${x.fin?fmt(x.fin.p10):'…'}</td></tr>`).join('')+'</table>';
+ const ref=vs[0].ref;if(ref)h+=`<div class="mini" style="margin-top:4px">Reference model before RL: mean ${fmt(ref.mean)}, worst 10% ${fmt(ref.p10)}.</div>`;
+ h+='<div class="bars" style="margin-top:8px">'+vs.map(x=>x.fin?`<div class="b"><u>${x.v.label}</u><span class="t"><i style="width:${x.fin.mean/maxMean*100}%;background:var(--c1)"></i></span><span>${fmt(x.fin.mean)}</span></div>`:'').join('')+'</div>';
+ if(cd.id==='overopt'&&vs[0].v.curve&&vs[0].v.curve.length>1){const v=vs[0];h+=`<div class="grid g2" style="margin-top:10px"><div><div class="sub">Reward the agent is paid (proxy)</div><canvas id="ox1" style="height:180px"></canvas></div><div><div class="sub">Real score (mean) — dashed: reference</div><canvas id="ox2" style="height:180px"></canvas></div></div>`;setTimeout(()=>{const px=v.proxy||[];const sm=smooth(px.map(q=>q.proxy_reward),6);chart($('ox1'),{series:[{c:'--c4',pts:px.map((p,i)=>[p.frames,sm[i]])}],ymin:-1,xfmt:x=>(x/1e6).toFixed(0)+'M',yfmt:x=>x.toFixed(1)});chart($('ox2'),{series:[{c:'--c1',pts:v.curve.map(e=>[e.frames,e.mean]),dots:1}],ymin:0,ymax:6800,hline:v.curve[0].mean,xfmt:x=>(x/1e6).toFixed(0)+'M'})},0)}
+ const ws=expWatch[cd.id];
+ h+=`<div class="row" style="margin-top:10px"><span class="sub">Watch it play (dangerous starts):</span><button class="btn sm" onclick="watchVar('${cd.id}','ref','${vs[0].v.cfg.ref}')">reference</button>${vs.map(x=>x.v.stage==='done'?`<button class="btn sm" onclick="watchVar('${cd.id}','${x.v.run}','runs/${x.v.run}/final')">${x.v.label}</button>`:'').join('')}</div>`;
+ if(ws)h+=`<div style="max-width:620px;margin-top:8px"><img class="game" id="xw_${cd.id}"><div class="sub" id="xi_${cd.id}">${ws.label}</div></div>`;
+ if(res.done){const best=[...vs].sort((a,b)=>b.fin.mean-a.fin.mean)[0],worst=[...vs].sort((a,b)=>a.fin.mean-b.fin.mean)[0];
+  let line=`Best real score: <b>${best.v.label}</b> (${fmt(best.fin.mean)}). Lowest: <b>${worst.v.label}</b> (${fmt(worst.fin.mean)}).`;
+  if(cd.id==='overopt'&&vs[0].v.curve.length>2){const c=vs[0].v.curve,pk=Math.max(...c.map(e=>e.mean)),last=c[c.length-1].mean;line+=` Peak real score along the way: ${fmt(pk)}; at the end: ${fmt(last)}${last<pk*0.85?' — it got <b>worse</b> after its peak: over-optimization.':'.'}`}
+  h+=`<div class="llm" style="margin-top:10px"><b>What happened.</b> ${line}<br><span class="mini">${cd.tells}</span><br><b>Your prediction:</b> ${cd.predict[chosen]!=null?cd.predict[chosen]:'(none)'}. Was it right? What would you change to test why?<br><b>In an LLM:</b> ${cd.llm}</div>`}
+ return h}
+window.addEventListener('resize',()=>S&&update());
+
+// ============ main loop ============
+function render(){renderStepper();const mains=[s0,s1,s2,s3,s4,s5,s6,s7],mounts=[null,m1,m2,m3,m4,m5,m6,m7];
+ if(built!==step){built=step;$('main').innerHTML=mains[step]();if(mounts[step])mounts[step]()}update()}
+function update(){const f=[null,null,u2,u3,u4,u5,u6,u7][step];if(f)f();else renderStepper();if(step===2&&$('refList')&&!$('refList').dataset.n){}}
+async function refresh(){try{const s=await api('/api/rlhf/state');const ev=await api('/api/state');S=s;S.evals=ev.evals;$('upd').textContent='updated '+ev.now;
+ if(built===-1)render();else{renderStepper();update()}}catch(e){$('upd').textContent='cannot reach the server'}}
+refresh();setInterval(()=>{if(!document.hidden)refresh()},2500);
+</script></body></html>
