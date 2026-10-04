@@ -28,6 +28,30 @@ class TRexProblem(Problem):
              "held keys) and presses nothing / jump / duck about 60 times a second.")
     action_names = ["no key", "jump (held)", "duck (held)"]
     obs_names = OBS_NAMES
+    obs_help = [
+        "Height of the dino above the ground, divided by 90 px. 0 on the ground, about 1 at the top of a full jump.",
+        "Vertical velocity of the dino, divided by 12. Negative while rising, positive while falling, 0 on the ground.",
+        "1 while the game considers the dino to be in a jump. Quirk: a landing exactly on the ground leaves this at 1 for about a second (a 'stuck landing').",
+        "1 while the dino is ducking (lowered body, smaller hit box).",
+        "1 if the duck key was pressed in mid-air to fall faster (fast fall / speed drop).",
+        "1 if the animation state is 'ducking' even though the dino is airborne. It drives the stuck-landing quirk, so the policy needs it.",
+        "Game speed, rescaled so 0 is the starting speed (6) and 1 the maximum (13). It rises slowly through the game.",
+        "Obstacle speed the policy measures itself from how far the nearest obstacle moved since the last step, smoothed, divided by 13. It differs from the game speed because the game's clock is in whole milliseconds.",
+        "Time since the previous display frame divided by 16.7 ms. About 0.5 at 120 Hz and 1.0 at 60 Hz, so the policy can adapt to the screen's refresh rate and jitter.",
+        "Horizontal gap between the dino's front edge and the nearest obstacle ahead, divided by the 600 px screen width. 1.5 means no obstacle ahead.",
+        "Width of the nearest obstacle ahead divided by 75 px (a group of cacti is wider). 0 if none.",
+        "Height of the nearest obstacle ahead divided by 50 px. 0 if none.",
+        "Gap between the ground and the bottom of the nearest obstacle, divided by 60 px. 0 for cacti; for pterodactyls it tells whether to duck under or jump over. 0 if none.",
+        "1 if the nearest obstacle is a pterodactyl, 0 if it is a cactus.",
+        "Same as obstacle 1 distance, for the second obstacle ahead (to plan the jump after the next). 1.5 means there is none.",
+        "Width of the second obstacle ahead divided by 75 px. 0 if none.",
+        "Height of the second obstacle ahead divided by 50 px. 0 if none.",
+        "Ground-to-bottom gap of the second obstacle divided by 60 px. 0 if none or a cactus.",
+        "1 if the second obstacle is a pterodactyl.",
+        "1 if no key is currently held (the key state the game actually received, after any input delay).",
+        "1 if the jump key is currently held down.",
+        "1 if the duck key is currently held down.",
+    ]
     gold_label = "game score"
     gold_cap = 6200.0
     clip_len = 150
