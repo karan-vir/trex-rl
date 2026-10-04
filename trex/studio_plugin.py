@@ -50,11 +50,23 @@ class TRexProblem(Problem):
 </svg>
 <p class="mini">(The picture adds a 20 px margin around the canvas; the numbers in the labels are the game's own coordinates.)</p>
 
-<h3>2 · Ticks: the game's unit of time</h3>
-<p>The game is a loop that the browser calls <b>once per screen refresh</b> (the browser's <code>requestAnimationFrame</code>): 60, 120 or 144 times a second depending on the display. On each pass the game works out how many milliseconds passed since the previous pass (<code>deltaTime</code>) and moves everything by that much, so it plays at the same speed on every display.</p>
-<p>To express movement the game defines a constant <b><code>FPS = 60</code></b> and uses it as a unit: <b>one "tick" = 1/60 s = 16.67 ms</b>. An obstacle moves <code>floor(speed × FPS / 1000 × deltaTime)</code> px per pass, which is "speed px per tick". So a speed of 6 means 6 px every 1/60 s, i.e. 360 px per second at the start (13 px per tick, 780 px per second, at the top speed). A tick is a unit of time, not a promise that the game runs 60 times a second. On a 60 Hz screen a pass is one tick; on 120 Hz a pass is about half a tick.</p>
-<p><b>How I know this.</b> It is not an assumption. The game's own source (version 29 from chromedino.com) contains <code>var FPS = 60;</code>, <code>msPerFrame = 1000 / FPS</code>, <code>deltaTime = now - (this.time || now)</code> and the movement line quoted above, and the engine here uses the same constants. I also measured the real game in the browser: at 120 screen frames per second a full jump lasted about 68 screen frames, i.e. about 34 ticks, as the rule predicts, and the game's clock showed gaps of 8 and 9 ms between passes, which only happens if the loop runs once per screen frame. One thing that is <i>not</i> per tick: the speed increase of 0.001 is added once per pass of the loop, so the game speeds up twice as fast per second on a 120 Hz screen.</p>
-<p>In this environment the agent makes one <b>decision per 1/60 s of game time</b>: 1 screen frame on a 60 Hz display, 2 on 120 Hz. The observation "frame time" tells the policy which case it is in.</p>
+<h3>2 · Time in the game: frames and ticks</h3>
+<p><b>Frame.</b> Your screen redraws 60, 120 or 144 times per second. Each time, the browser asks the game: "update yourself and draw". One such update is a <b>frame</b>. So how many frames happen per second depends on your screen.</p>
+<p><b>The problem.</b> If the game moved an obstacle a fixed 6 px every frame, it would run twice as fast on a 120 Hz screen as on a 60 Hz one. To avoid that, on every frame the game measures how much real time has passed since the previous frame and moves things in proportion.</p>
+<p><b>Tick.</b> To write its speeds down, the game needs one reference length of time. It picked 1/60 of a second (16.7 ms) and we call that a <b>tick</b>. "Speed 6" means "6 px per tick", i.e. 6 px every 1/60 s, which is 360 px per second. The same yardstick is used for gravity and jump velocity below.</p>
+<table><tr><th>screen</th><th class="n">one frame lasts</th><th class="n">that is</th><th class="n">an obstacle at speed 6 moves, per frame</th><th class="n">per second</th></tr>
+<tr><td>60 Hz</td><td class="n">16.7 ms</td><td class="n">1 tick</td><td class="n">6 px</td><td class="n">360 px</td></tr>
+<tr><td>120 Hz</td><td class="n">8.3 ms</td><td class="n">half a tick</td><td class="n">3 px</td><td class="n">360 px</td></tr></table>
+<p class="mini">The game moves objects in whole pixels (it rounds down), so at 120 Hz you actually see 2 px and 3 px alternate, averaging 3.</p>
+<p><b>A tick is a unit of time, not a rate.</b> The game does not run 60 times per second; that depends on your screen. "Tick" only means "1/60 s", the yardstick for every number in the game.</p>
+<p><b>What the agent does.</b> It makes one decision per tick (1/60 s of game time): that is 1 frame on a 60 Hz screen and 2 frames on a 120 Hz screen. The observation "frame time" (time since the last frame ÷ 16.7 ms) tells the policy which case it is in.</p>
+<p><b>One thing that does depend on the screen.</b> The game's speed-up (+0.001 to the speed) is applied once per frame, not once per tick, so on a 120 Hz screen the game gets faster twice as quickly per second.</p>
+<details><summary>How I checked all this (I did not assume it)</summary>
+<ul>
+<li><b>The game's own code</b> (version 29 from chromedino.com, fetched earlier in this project) contains <code>FPS = 60</code>, <code>msPerFrame = 1000 / FPS</code>, a line that measures the time since the previous frame, and the movement rule <code>floor(speed × FPS / 1000 × time since last frame)</code>. This engine uses the same constants.</li>
+<li><b>Measured in the real game in the browser:</b> at 120 frames per second a full jump lasted about 68 frames, which is about 34 ticks, as the tick rule predicts.</li>
+<li><b>The game's clock</b> showed gaps of 8 and 9 ms between frames, which only happens if the game updates once per screen frame (120 per second), not at a fixed 60.</li>
+</ul></details>
 
 <h3>3 · A jump, tick by tick</h3>
 <p>Pressing jump gives the dino an upward velocity of <b>10 + speed/10</b> px per tick (10.6 at the starting speed). Because y grows downward, upward is <b>negative</b>: the velocity starts at −10.6. Then, every tick, two things happen: the dino moves by its velocity (y += velocity), and gravity adds 0.6 to the velocity. So it rises more and more slowly, stops at the top, and falls faster and faster. Measured in the engine at the starting speed, 60 ticks per second, jump key held:</p>
