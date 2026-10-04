@@ -28,18 +28,64 @@ class TRexProblem(Problem):
              "held keys) and presses nothing / jump / duck about 60 times a second.")
     action_names = ["no key", "jump (held)", "duck (held)"]
     obs_names = OBS_NAMES
+
+    primer = """
+<h3>1 · The screen and its coordinates</h3>
+<p>The game is drawn on a canvas <b>600 px wide and 150 px tall</b>. Positions use screen coordinates: <b>x</b> counts to the right from the left edge, and <b>y</b> counts <b>downward</b> from the top edge, so a larger y means lower on the screen. The dino's feet rest on the ground line at <b>y = 140</b>; its body is 47 px tall, so its top is at y = 93. It stands at x = 50 and is 44 px wide, so its front edge is at x = 94. Obstacles appear at the right edge (x = 600) and move left.</p>
+<svg viewBox="0 0 640 190" style="width:100%;max-width:640px;background:#fff;border:1px solid #888;border-radius:8px" font-family="system-ui" font-size="11">
+ <rect x="20" y="20" width="600" height="150" fill="#f7f7f7" stroke="#999"/>
+ <line x1="20" y1="160" x2="620" y2="160" stroke="#444" stroke-width="2"/>
+ <rect x="70" y="113" width="44" height="47" fill="#7cc3b9" stroke="#2b7a70"/>
+ <rect x="450" y="125" width="25" height="35" fill="#9ccf9c" stroke="#3d7a3d"/>
+ <text x="26" y="34" fill="#555">(0, 0) top-left</text>
+ <text x="615" y="34" text-anchor="end" fill="#555">x grows to the right (up to 600)</text>
+ <text x="26" y="62" fill="#555">y grows DOWNWARD</text>
+ <text x="26" y="76" fill="#555">(150 at the bottom edge)</text>
+ <text x="122" y="122" fill="#2b7a70">dino top: y = 93</text>
+ <text x="122" y="139" fill="#2b7a70">dino: x from 50 to 94</text>
+ <text x="122" y="178" fill="#444" font-weight="bold">ground line: y = 140 (the dino's feet)</text>
+ <text x="462" y="120" fill="#3d7a3d">obstacle, moving left</text>
+ <line x1="94" y1="100" x2="94" y2="165" stroke="#c0392b" stroke-dasharray="3 3"/>
+ <text x="98" y="95" fill="#c0392b" dx="0">front edge x = 94</text>
+</svg>
+<p class="mini">(The picture adds a 20 px margin around the canvas; the numbers in the labels are the game's own coordinates.)</p>
+
+<h3>2 · Ticks: the game's clock</h3>
+<p>The game is a loop. On every pass (a <b>tick</b>, also called a frame) it moves everything a little and redraws. The original game is built for <b>60 ticks per second</b>, and <b>every number in it is "per tick"</b>: a speed of 6 means obstacles move 6 px left each tick, which is 360 px per second at the start (13 px per tick, 780 px per second, at the top speed).</p>
+<p>On a 120 Hz screen the browser runs the loop twice as often, and the game scales each movement by the time that really passed, so the game does not run twice as fast. In this environment the agent makes one <b>decision per 1/60 s of game time</b>: that is 1 screen frame on a 60 Hz display and 2 on a 120 Hz display. The observation "frame time" tells the policy which case it is in.</p>
+
+<h3>3 · A jump, tick by tick</h3>
+<p>Pressing jump gives the dino an upward velocity of <b>10 + speed/10</b> px per tick (10.6 at the starting speed). Because y grows downward, upward is <b>negative</b>: the velocity starts at −10.6. Then, every tick, two things happen: the dino moves by its velocity (y += velocity), and gravity adds 0.6 to the velocity. So it rises more and more slowly, stops at the top, and falls faster and faster. Measured in the engine at the starting speed, 60 ticks per second, jump key held:</p>
+<table><tr><th>tick</th><th class="n">1</th><th class="n">5</th><th class="n">10</th><th class="n">16</th><th class="n">18</th><th class="n">20</th><th class="n">25</th><th class="n">30</th><th class="n">34</th></tr>
+<tr><td>vertical velocity (px/tick)</td><td class="n">−10.0</td><td class="n">−7.6</td><td class="n">−3.8</td><td class="n">−0.2</td><td class="n">+1.0</td><td class="n">+2.2</td><td class="n">+5.2</td><td class="n">+8.2</td><td class="n">+10.6</td></tr>
+<tr><td>height above the ground (px)</td><td class="n">11</td><td class="n">48</td><td class="n">78</td><td class="n">92</td><td class="n">92</td><td class="n">89</td><td class="n">72</td><td class="n">39</td><td class="n">3</td></tr></table>
+<p>The whole jump takes 34 to 35 ticks, about 0.58 s, and the top is about 92 px up (the simple formula 10.6² ÷ (2 × 0.6) gives 94). The vertical velocity therefore ranges from about −10.7 to +10.6 px per tick.</p>
+
+<h3>4 · Why the observations are divided by constants (including 12)</h3>
+<p>A neural network learns best when its inputs are all of similar size, ideally between about −1 and 1. The raw numbers here are not: a flag is 0 or 1, a velocity reaches ±10.7, and a distance reaches 500 or more. So each number is divided by a typical maximum. The vertical velocity peaks at about 10.7 px per tick, so dividing by <b>12</b>, a little above that, maps it into roughly −0.9 to +0.9. There is nothing special about 12; 11 or 15 would do about as well, only the scale would change. The same reasoning gives height ÷ 90 (the jump top, about 90 px), distance ÷ 600 (the screen width), and so on, as each definition below says.</p>
+
+<h3>5 · The "stuck landing" quirk</h3>
+<p>This is a quirk of the original Chrome game, ported faithfully, and it matters because the dino cannot react while stuck.</p>
+<p><b>What normally happens.</b> The jump ends when the dino's y goes <i>past</i> the ground (y &gt; 93, meaning slightly below ground level); the game then puts it back at y = 93 and resets to running.</p>
+<p><b>What goes wrong.</b> The game advances the jump physics by "elapsed time ÷ the frame time of the dino's current pose". For the jumping pose that frame time is 16.7 ms (one tick), but for the <b>ducking</b> pose it is 125 ms, so physics suddenly runs 7.5 times slower. If the dino touches the ground <b>exactly</b> at y = 93 (not past it) while the duck key is held, the jump has not ended (y is not &gt; 93) but the pose switches to ducking. Now each step moves it only velocity × (1/15) px, about 0.25 px, and positions are rounded to whole pixels, so the move rounds to 0. The dino hangs on the ground, still flagged as <b>jumping</b>, while its velocity creeps up slowly until a move finally rounds to 1 px. Measured at 120 Hz (screen frames of 8.3 ms):</p>
+<table><tr><th>screen frame</th><th class="n">12</th><th class="n">13</th><th class="n">14</th><th class="n">15</th><th class="n">16</th><th class="n">…</th><th class="n">100</th></tr>
+<tr><td>y</td><td class="n">83</td><td class="n">88</td><td class="n"><b>93</b></td><td class="n">93</td><td class="n">93</td><td class="n">93</td><td class="n">ends</td></tr>
+<tr><td>pose</td><td class="n">jumping</td><td class="n">jumping</td><td class="n">ducking</td><td class="n">ducking</td><td class="n">ducking</td><td class="n">ducking</td><td class="n">running</td></tr>
+<tr><td>jumping flag</td><td class="n">1</td><td class="n">1</td><td class="n">1</td><td class="n">1</td><td class="n">1</td><td class="n">1</td><td class="n">0</td></tr></table>
+<p>The dino sat on the ground, unable to jump again (the game refuses a new jump while 'jumping'), for about 86 screen frames, roughly 0.7 s. Landing just one pixel deeper (y &gt; 93) would have ended the jump cleanly. In the observation this shows up as <b>height 0 while jumping = 1 and duck-anim = 1</b>. In my quick search I found it at 120 Hz; I did not find a case at 60 Hz, so it may be rarer there.</p>
+"""
     obs_note = ("The policy never sees pixels, only these 22 numbers. The game canvas is 600 px wide by 150 px tall; the dino stands on a ground line "
                 "at y = 140 with its top at y = 93. Most numbers are divided by a constant so they land roughly between -1 and 1, which helps the network "
                 "train. Each definition says where its constant comes from: a rule of the game, a fact measured from the engine, or a design choice of this "
                 "environment (it could be changed; only the scale would change).")
     obs_help = [
-        "Dino height above the ground in px, divided by 90. Design choice: 90 is the apex of a full jump, measured in the engine (about 88 to 90 px at "
-        "game speeds 6 and 13), so 1.0 means the top of a jump. It is NOT the height of the visible view: the canvas is 150 px tall.",
+        "Dino height above the ground in px, divided by 90. Design choice: 90 is about the top of a full jump, measured in the engine (88 to 92 px depending on speed and "
+        "timing; see Game basics), so 1.0 means the top of a jump. It is NOT the height of the visible view: the canvas is 150 px tall.",
         "Vertical velocity of the dino in px per game frame (1/60 s), divided by 12. Negative while rising, positive while falling, 0 on the ground. "
         "A jump launches at -(10 + speed/10), i.e. -10.6 at the start speed and -11.3 at the top speed (game rule); measured values stay within about "
         "-10.7 to +10.6. The 12 is a design choice slightly above that, keeping the number inside -1 to 1.",
-        "1 while the game considers the dino to be in a jump, else 0. Quirk of the original game: if the dino lands exactly on the ground line "
-        "(rather than overshooting it), the game keeps it in jump physics for about a second (a 'stuck landing').",
+        "1 while the game considers the dino to be in a jump, else 0. Quirk of the original game: if the dino touches the ground exactly (instead of going slightly past it) while the "
+        "duck key is held, the jump does not end and it stays stuck for about 0.7 s (see 'The stuck landing' in Game basics).",
         "1 while the dino is ducking (lowered body, smaller hit box), else 0.",
         "1 if the duck key was pressed in mid-air, which makes the dino fall faster (the game's 'speed drop'), else 0.",
         "1 when the game's internal animation state is 'ducking'. Normally this equals the 'ducking' flag. It differs in the stuck-landing case: the dino "
