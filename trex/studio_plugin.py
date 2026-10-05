@@ -137,6 +137,7 @@ class TRexProblem(Problem):
     clip_len = 150
     max_steps = 20_000
     rl_steps = 1_500_000
+    ref_steps = 3_000_000
     parallel = True
     judge_help = ("Better = the dino survives and clears the obstacles without crashing. Both crash: the one that lasts longer is better. "
                   "Both survive: they are the same unless one clears more obstacles.")
